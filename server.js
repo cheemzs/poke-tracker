@@ -1,11 +1,13 @@
 const express = require('express');
-const fs = require('fs');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
-const USERS_FILE = 'users.json';
-const CARDS_FILE = 'cards.json';
+
+const SUPABASE_URL = 'https://kilkeuaeusfqsobhxlou.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpbGtldWFldXNmcXNvYmh4bG91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMjYyNjEsImV4cCI6MjA5NTYwMjI2MX0.Gph5uSVo45L7__58vRZz-KaVrs8o6RSdnQusY2csJTw';
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 app.use(express.json());
 app.use(session({
@@ -14,24 +16,6 @@ app.use(session({
   saveUninitialized: false,
   cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
-
-function readUsers() {
-  if (!fs.existsSync(USERS_FILE)) return [];
-  return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-}
-
-function writeUsers(data) {
-  fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
-}
-
-function readCards() {
-  if (!fs.existsSync(CARDS_FILE)) return [];
-  return JSON.parse(fs.readFileSync(CARDS_FILE, 'utf8'));
-}
-
-function writeCards(data) {
-  fs.writeFileSync(CARDS_FILE, JSON.stringify(data, null, 2));
-}
 
 function requireAuth(req, res, next) {
   if (!req.session.userId) return res.status(401).json({ error: 'Not logged in' });
@@ -42,25 +26,36 @@ app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
-  const users = readUsers();
-  if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) {
-    return res.status(400).json({ error: 'Username already taken' });
-  }
+  const { data: existing } = await supabase
+    .from('users')
+    .select('id')
+    .ilike('username', username)
+    .single();
+
+  if (existing) return res.status(400).json({ error: 'Username already taken' });
 
   const hash = await bcrypt.hash(password, 10);
-  const user = { id: Date.now().toString(), username, password: hash };
-  users.push(user);
-  writeUsers(users);
+  const id = Date.now().toString();
 
-  req.session.userId = user.id;
-  req.session.username = user.username;
-  res.json({ username: user.username });
+  const { error } = await supabase
+    .from('users')
+    .insert([{ id, username, password: hash }]);
+
+  if (error) return res.status(500).json({ error: 'Failed to create account' });
+
+  req.session.userId = id;
+  req.session.username = username;
+  res.json({ username });
 });
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
-  const users = readUsers();
-  const user = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+
+  const { data: user } = await supabase
+    .from('users')
+    .select('*')
+    .ilike('username', username)
+    .single();
 
   if (!user || !(await bcrypt.compare(password, user.password))) {
     return res.status(401).json({ error: 'Invalid username or password' });
@@ -81,34 +76,79 @@ app.get('/api/me', (req, res) => {
   res.json({ username: req.session.username });
 });
 
-app.get('/api/cards', requireAuth, (req, res) => {
-  const all = readCards();
-  res.json(all.filter(c => c.userId === req.session.userId));
+app.get('/api/cards', requireAuth, async (req, res) => {
+  const { data, error } = await supabase
+    .from('cards')
+    .select('*')
+    .eq('user_id', req.session.userId)
+    .order('id', { ascending: true });
+
+  if (error) return res.status(500).json({ error: 'Failed to fetch cards' });
+
+  const mapped = data.map(c => ({
+    id: c.id,
+    name: c.name,
+    set: c.set_name,
+    grade: c.grade,
+    purchasePrice: c.purchase_price,
+    currentValue: c.current_value,
+    lastUpdated: c.last_updated,
+    url: c.url,
+    priceHistory: c.price_history || []
+  }));
+
+  res.json(mapped);
 });
 
-app.post('/api/cards', requireAuth, (req, res) => {
-  const all = readCards();
-  const card = { ...req.body, id: Date.now().toString(), userId: req.session.userId };
-  all.push(card);
-  writeCards(all);
-  res.json(card);
+app.post('/api/cards', requireAuth, async (req, res) => {
+  const { name, set, grade, purchasePrice, currentValue, lastUpdated, url, priceHistory } = req.body;
+  const id = Date.now().toString();
+
+  const { error } = await supabase
+    .from('cards')
+    .insert([{
+      id,
+      user_id: req.session.userId,
+      name,
+      set_name: set,
+      grade,
+      purchase_price: purchasePrice,
+      current_value: currentValue,
+      last_updated: lastUpdated,
+      url,
+      price_history: priceHistory || []
+    }]);
+
+  if (error) return res.status(500).json({ error: 'Failed to save card' });
+
+  res.json({ id, name, set, grade, purchasePrice, currentValue, lastUpdated, url, priceHistory: priceHistory || [] });
 });
 
-app.put('/api/cards/:id', requireAuth, (req, res) => {
-  let all = readCards();
-  const idx = all.findIndex(c => c.id === req.params.id && c.userId === req.session.userId);
-  if (idx === -1) return res.status(404).json({ error: 'Card not found' });
-  all[idx] = { ...all[idx], ...req.body };
-  writeCards(all);
+app.put('/api/cards/:id', requireAuth, async (req, res) => {
+  const { currentValue, lastUpdated, priceHistory } = req.body;
+
+  const { error } = await supabase
+    .from('cards')
+    .update({
+      current_value: currentValue,
+      last_updated: lastUpdated,
+      price_history: priceHistory
+    })
+    .eq('id', req.params.id)
+    .eq('user_id', req.session.userId);
+
+  if (error) return res.status(500).json({ error: 'Failed to update card' });
   res.json({ ok: true });
 });
 
-app.delete('/api/cards/:id', requireAuth, (req, res) => {
-  let all = readCards();
-  const before = all.length;
-  all = all.filter(c => !(c.id === req.params.id && c.userId === req.session.userId));
-  if (all.length === before) return res.status(404).json({ error: 'Card not found' });
-  writeCards(all);
+app.delete('/api/cards/:id', requireAuth, async (req, res) => {
+  const { error } = await supabase
+    .from('cards')
+    .delete()
+    .eq('id', req.params.id)
+    .eq('user_id', req.session.userId);
+
+  if (error) return res.status(500).json({ error: 'Failed to delete card' });
   res.json({ ok: true });
 });
 
