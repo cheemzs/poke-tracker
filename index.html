@@ -5,8 +5,59 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pokémon Card Tracker</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
+
+  <div id="toast-container"></div>
+
+  <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+    <div class="modal" id="card-modal">
+      <button class="modal-close" onclick="closeModal()">&#x2715;</button>
+      <div class="modal-header">
+        <div>
+          <h2 id="modal-name"></h2>
+          <p id="modal-meta"></p>
+        </div>
+        <span class="badge" id="modal-grade"></span>
+      </div>
+      <div class="modal-stats">
+        <div class="modal-stat">
+          <div class="modal-stat-label">Purchase price</div>
+          <div class="modal-stat-value" id="modal-cost"></div>
+        </div>
+        <div class="modal-stat">
+          <div class="modal-stat-label">Current value</div>
+          <div class="modal-stat-value" id="modal-value"></div>
+        </div>
+        <div class="modal-stat">
+          <div class="modal-stat-label">Profit / loss</div>
+          <div class="modal-stat-value" id="modal-profit"></div>
+        </div>
+        <div class="modal-stat">
+          <div class="modal-stat-label">Last updated</div>
+          <div class="modal-stat-value" id="modal-updated"></div>
+        </div>
+      </div>
+      <div class="modal-chart-wrap">
+        <p class="modal-chart-label">Value history (SGD)</p>
+        <div class="modal-chart-container">
+          <canvas id="price-chart"></canvas>
+        </div>
+        <p class="modal-chart-empty" id="modal-chart-empty">No price history yet — refresh prices to start tracking</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="confirm-overlay">
+    <div class="modal confirm-modal">
+      <p class="confirm-message" id="confirm-message"></p>
+      <div class="confirm-actions">
+        <button class="btn-cancel" id="confirm-cancel">Cancel</button>
+        <button class="btn-danger" id="confirm-ok">Remove</button>
+      </div>
+    </div>
+  </div>
 
   <div class="topbar">
     <div>

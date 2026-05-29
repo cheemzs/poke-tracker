@@ -1,12 +1,10 @@
 const USD_TO_SGD = 1.35;
 let cards = [];
+let priceChart = null;
 
 async function init() {
   const res = await fetch('/api/me');
-  if (!res.ok) {
-    window.location.href = '/login.html';
-    return;
-  }
+  if (!res.ok) { window.location.href = '/login.html'; return; }
   const { username } = await res.json();
   document.getElementById('username-display').textContent = username;
   await loadCards();
@@ -24,6 +22,39 @@ async function loadCards() {
   render();
 }
 
+function toast(message, type) {
+  const container = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + (type || 'info');
+  t.textContent = message;
+  container.appendChild(t);
+  setTimeout(() => t.classList.add('toast-show'), 10);
+  setTimeout(() => {
+    t.classList.remove('toast-show');
+    setTimeout(() => t.remove(), 300);
+  }, 3500);
+}
+
+function confirmDialog(message) {
+  return new Promise(resolve => {
+    document.getElementById('confirm-message').textContent = message;
+    const overlay = document.getElementById('confirm-overlay');
+    overlay.classList.add('active');
+    const ok = document.getElementById('confirm-ok');
+    const cancel = document.getElementById('confirm-cancel');
+    function cleanup(result) {
+      overlay.classList.remove('active');
+      ok.removeEventListener('click', onOk);
+      cancel.removeEventListener('click', onCancel);
+      resolve(result);
+    }
+    function onOk() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    ok.addEventListener('click', onOk);
+    cancel.addEventListener('click', onCancel);
+  });
+}
+
 function toggleForm() {
   const f = document.getElementById('add-form');
   f.classList.toggle('open');
@@ -37,21 +68,22 @@ async function addCard() {
   const price = parseFloat(document.getElementById('f-price').value);
   const url = document.getElementById('f-url').value.trim();
 
-  if (!name) { alert('Please enter a card name.'); return; }
-  if (!price || price <= 0) { alert('Please enter a valid purchase price.'); return; }
+  if (!name) { toast('Please enter a card name.', 'error'); return; }
+  if (!price || price <= 0) { toast('Please enter a valid purchase price.', 'error'); return; }
 
   const res = await fetch('/api/cards', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, set, grade, purchasePrice: price, currentValue: null, lastUpdated: null, url })
+    body: JSON.stringify({ name, set, grade, purchasePrice: price, currentValue: null, lastUpdated: null, url, priceHistory: [] })
   });
 
-  if (!res.ok) { alert('Failed to save card. Please try again.'); return; }
+  if (!res.ok) { toast('Failed to save card. Please try again.', 'error'); return; }
 
   const card = await res.json();
   cards.push(card);
   render();
   toggleForm();
+  toast(name + ' added to your collection.', 'success');
 
   document.getElementById('f-name').value = '';
   document.getElementById('f-set').value = '';
@@ -61,12 +93,123 @@ async function addCard() {
 }
 
 async function deleteCard(id) {
-  if (!confirm('Remove this card?')) return;
+  const card = cards.find(c => c.id === id);
+  const confirmed = await confirmDialog('Remove "' + (card ? card.name : 'this card') + '" from your collection?');
+  if (!confirmed) return;
   const res = await fetch('/api/cards/' + id, { method: 'DELETE' });
-  if (!res.ok) { alert('Failed to delete card.'); return; }
+  if (!res.ok) { toast('Failed to delete card.', 'error'); return; }
   cards = cards.filter(c => c.id !== id);
   render();
+  toast('Card removed.', 'info');
 }
+
+function openCard(id) {
+  const card = cards.find(c => c.id === id);
+  if (!card) return;
+
+  const cost = Number(card.purchasePrice);
+  const val = card.currentValue != null ? Number(card.currentValue) : null;
+  const profit = val != null ? val - cost : null;
+
+  document.getElementById('modal-name').textContent = card.name;
+  document.getElementById('modal-meta').textContent = card.set || 'Unknown set';
+
+  const gradeEl = document.getElementById('modal-grade');
+  gradeEl.textContent = card.grade;
+  gradeEl.className = 'badge ' + (card.grade === 'raw' ? 'badge-raw' : 'badge-psa');
+
+  document.getElementById('modal-cost').textContent = 'SGD $' + cost.toFixed(2);
+  document.getElementById('modal-value').textContent = val != null ? 'SGD $' + val.toFixed(2) : '—';
+
+  const profitEl = document.getElementById('modal-profit');
+  if (profit != null) {
+    profitEl.textContent = (profit >= 0 ? '+' : '') + 'SGD $' + profit.toFixed(2);
+    profitEl.className = 'modal-stat-value ' + (profit >= 0 ? 'profit-pos' : 'profit-neg');
+  } else {
+    profitEl.textContent = '—';
+    profitEl.className = 'modal-stat-value';
+  }
+
+  document.getElementById('modal-updated').textContent = card.lastUpdated
+    ? new Date(card.lastUpdated).toLocaleDateString('en-SG')
+    : '—';
+
+  const history = card.priceHistory || [];
+  const emptyEl = document.getElementById('modal-chart-empty');
+  const chartContainer = document.querySelector('.modal-chart-container');
+
+  if (history.length < 2) {
+    emptyEl.style.display = 'block';
+    chartContainer.style.display = 'none';
+  } else {
+    emptyEl.style.display = 'none';
+    chartContainer.style.display = 'block';
+
+    const labels = history.map(p => new Date(p.date).toLocaleDateString('en-SG'));
+    const values = history.map(p => p.value);
+
+    if (priceChart) { priceChart.destroy(); priceChart = null; }
+
+    const ctx = document.getElementById('price-chart').getContext('2d');
+    priceChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Value (SGD)',
+          data: values,
+          borderColor: '#1a1a1a',
+          backgroundColor: 'rgba(26,26,26,0.06)',
+          borderWidth: 1.5,
+          pointRadius: 3,
+          pointBackgroundColor: '#1a1a1a',
+          tension: 0.3,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => 'SGD $' + Number(ctx.raw).toFixed(2)
+            }
+          }
+        },
+        scales: {
+          y: {
+            ticks: {
+              callback: v => 'SGD $' + v,
+              font: { size: 11 }
+            },
+            grid: { color: '#f0efea' }
+          },
+          x: {
+            ticks: { font: { size: 11 } },
+            grid: { display: false }
+          }
+        }
+      }
+    });
+  }
+
+  document.getElementById('modal-overlay').classList.add('active');
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modal-overlay')) return;
+  document.getElementById('modal-overlay').classList.remove('active');
+  if (priceChart) { priceChart.destroy(); priceChart = null; }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.getElementById('modal-overlay').classList.remove('active');
+    document.getElementById('confirm-overlay').classList.remove('active');
+  }
+});
 
 function fmt(val) {
   return val != null ? 'SGD $' + Number(val).toFixed(2) : '—';
@@ -92,7 +235,7 @@ function render() {
     const gradeClass = c.grade === 'raw' ? 'badge-raw' : 'badge-psa';
     const updated = c.lastUpdated ? new Date(c.lastUpdated).toLocaleDateString('en-SG') : '—';
 
-    return '<tr>' +
+    return '<tr class="card-row" onclick="openCard(\'' + c.id + '\')">' +
       '<td title="' + esc(c.name) + '">' + esc(c.name) + '</td>' +
       '<td title="' + esc(c.set || '—') + '">' + esc(c.set || '—') + '</td>' +
       '<td><span class="badge ' + gradeClass + '">' + esc(c.grade) + '</span></td>' +
@@ -100,7 +243,7 @@ function render() {
       '<td>' + fmt(val) + '</td>' +
       '<td class="' + profitClass + '">' + profitStr + '</td>' +
       '<td>' + updated + '</td>' +
-      '<td><button class="del-btn" onclick="deleteCard(\'' + c.id + '\')" title="Delete">&#x2715;</button></td>' +
+      '<td><button class="del-btn" onclick="event.stopPropagation(); deleteCard(\'' + c.id + '\')" title="Delete">&#x2715;</button></td>' +
     '</tr>';
   }).join('');
 
@@ -169,22 +312,31 @@ async function fetchPrice(card) {
 }
 
 async function refreshPrices() {
-  if (cards.length === 0) { alert('No cards to refresh.'); return; }
+  if (cards.length === 0) { toast('No cards to refresh.', 'info'); return; }
   const btn = document.querySelector('.refresh-btn');
   btn.disabled = true;
   btn.textContent = '↻ Fetching...';
 
+  let updated = 0;
   for (let i = 0; i < cards.length; i++) {
     try {
       const price = await fetchPrice(cards[i]);
       if (price != null) {
+        const now = Date.now();
         cards[i].currentValue = price;
-        cards[i].lastUpdated = Date.now();
+        cards[i].lastUpdated = now;
+        if (!cards[i].priceHistory) cards[i].priceHistory = [];
+        cards[i].priceHistory.push({ date: now, value: price });
         await fetch('/api/cards/' + cards[i].id, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ currentValue: price, lastUpdated: cards[i].lastUpdated })
+          body: JSON.stringify({
+            currentValue: price,
+            lastUpdated: now,
+            priceHistory: cards[i].priceHistory
+          })
         });
+        updated++;
       }
     } catch (e) {
       console.error('Failed for ' + cards[i].name, e);
@@ -193,9 +345,16 @@ async function refreshPrices() {
   }
 
   render();
-  document.getElementById('last-updated').textContent = 'Last refreshed: ' + new Date().toLocaleString('en-SG');
+  const now = new Date().toLocaleString('en-SG');
+  document.getElementById('last-updated').textContent = 'Last refreshed: ' + now;
   btn.disabled = false;
   btn.textContent = '↻ Refresh prices';
+
+  if (updated > 0) {
+    toast('Updated prices for ' + updated + ' card' + (updated > 1 ? 's' : '') + '.', 'success');
+  } else {
+    toast('No prices could be fetched. Check your PriceCharting URLs.', 'error');
+  }
 }
 
 init();
