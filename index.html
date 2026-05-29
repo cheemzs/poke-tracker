@@ -1,68 +1,75 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My Page</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 20px;
-      background-color: #f5f5f5;
-      color: #333;
-    }
-
-    header {
-      background-color: #4a90e2;
-      color: white;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-    }
-
-    header h1 {
-      margin: 0;
-    }
-
-    main {
-      background-color: white;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-
-    footer {
-      text-align: center;
-      color: #888;
-      font-size: 14px;
-    }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pokémon Card Tracker</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-  <header>
-    <h1>Welcome to My Page</h1>
-    <p>A simple starter HTML page</p>
-  </header>
+  <h1>Card tracker</h1>
+  <p class="subtitle">Track your Pokémon card collection and portfolio value in SGD</p>
 
-  <main>
-    <h2>About</h2>
-    <p>This is your main content area. Edit this file to build your page.</p>
+  <div class="summary-grid">
+    <div class="metric"><div class="metric-label">Total cards</div><div class="metric-value" id="s-count">0</div></div>
+    <div class="metric"><div class="metric-label">Total cost</div><div class="metric-value" id="s-cost">SGD $0.00</div></div>
+    <div class="metric"><div class="metric-label">Current value</div><div class="metric-value" id="s-value">SGD $0.00</div></div>
+    <div class="metric"><div class="metric-label">Total profit/loss</div><div class="metric-value" id="s-profit">SGD $0.00</div></div>
+  </div>
 
-    <h2>Getting Started</h2>
-    <ul>
-      <li>Edit the content in <code>index.html</code></li>
-      <li>Add your own styles in the <code>&lt;style&gt;</code> section</li>
-      <li>Build out more sections as needed</li>
-    </ul>
-  </main>
+  <div class="section-header">
+    <span class="section-title">My cards</span>
+    <div class="top-actions">
+      <button class="refresh-btn" onclick="refreshPrices()">↻ Refresh prices</button>
+      <button class="add-btn" onclick="toggleForm()">+ Add card</button>
+    </div>
+  </div>
 
-  <footer>
-    <p>&copy; 2026 My Page</p>
-  </footer>
+  <div class="form-card" id="add-form">
+    <div class="form-grid">
+      <div class="form-group"><label>Card name</label><input type="text" id="f-name" placeholder="e.g. Mew V" /></div>
+      <div class="form-group"><label>Set</label><input type="text" id="f-set" placeholder="e.g. Fusion Strike" /></div>
+      <div class="form-group"><label>Grade / condition</label>
+        <select id="f-grade">
+          <option value="raw">Raw</option>
+          <option value="PSA 10">PSA 10</option>
+          <option value="PSA 9">PSA 9</option>
+          <option value="PSA 8">PSA 8</option>
+          <option value="PSA 7">PSA 7</option>
+          <option value="BGS 10">BGS 10</option>
+          <option value="BGS 9.5">BGS 9.5</option>
+          <option value="BGS 9">BGS 9</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Purchase price (SGD)</label><input type="number" id="f-price" placeholder="0.00" step="0.01" /></div>
+      <div class="form-group full"><label>PriceCharting URL</label><input type="text" id="f-url" placeholder="https://www.pricecharting.com/game/pokemon-.../card-123" /></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-cancel" onclick="toggleForm()">Cancel</button>
+      <button class="btn-primary" onclick="addCard()">Add card</button>
+    </div>
+  </div>
 
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Card name</th>
+          <th>Set</th>
+          <th>Grade</th>
+          <th>Purchase price</th>
+          <th>Current value</th>
+          <th>Profit / loss</th>
+          <th>Last updated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="card-table"></tbody>
+    </table>
+  </div>
+  <p class="last-updated" id="last-updated"></p>
+
+  <script src="script.js"></script>
 </body>
 </html>
