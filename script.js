@@ -1,8 +1,10 @@
 const USD_TO_SGD = 1.35;
-let cards = JSON.parse(localStorage.getItem('pokemon-cards') || '[]');
+let cards = [];
 
-function save() {
-  localStorage.setItem('pokemon-cards', JSON.stringify(cards));
+async function loadCards() {
+  const res = await fetch('/api/cards');
+  cards = await res.json();
+  render();
 }
 
 function toggleForm() {
@@ -11,7 +13,7 @@ function toggleForm() {
   if (f.classList.contains('open')) document.getElementById('f-name').focus();
 }
 
-function addCard() {
+async function addCard() {
   const name = document.getElementById('f-name').value.trim();
   const set = document.getElementById('f-set').value.trim();
   const grade = document.getElementById('f-grade').value;
@@ -23,18 +25,14 @@ function addCard() {
     return;
   }
 
-  cards.push({
-    id: Date.now(),
-    name,
-    set,
-    grade,
-    purchasePrice: price,
-    currentValue: null,
-    lastUpdated: null,
-    url
+  const res = await fetch('/api/cards', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, set, grade, purchasePrice: price, currentValue: null, lastUpdated: null, url })
   });
 
-  save();
+  const card = await res.json();
+  cards.push(card);
   render();
   toggleForm();
 
@@ -45,10 +43,10 @@ function addCard() {
   document.getElementById('f-grade').value = 'raw';
 }
 
-function deleteCard(id) {
+async function deleteCard(id) {
   if (!confirm('Remove this card?')) return;
+  await fetch('/api/cards/' + id, { method: 'DELETE' });
   cards = cards.filter(c => c.id !== id);
-  save();
   render();
 }
 
@@ -149,19 +147,22 @@ async function refreshPrices() {
       if (price) {
         cards[i].currentValue = price;
         cards[i].lastUpdated = Date.now();
+        await fetch('/api/cards/' + cards[i].id, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentValue: price, lastUpdated: cards[i].lastUpdated })
+        });
       }
     } catch (e) {
-      console.error('Failed to fetch price for ' + cards[i].name, e);
+      console.error('Failed for ' + cards[i].name, e);
     }
     await new Promise(r => setTimeout(r, 1000));
   }
 
-  save();
   render();
-
   document.getElementById('last-updated').textContent = 'Last refreshed: ' + new Date().toLocaleString('en-SG');
   btn.disabled = false;
   btn.textContent = '↻ Refresh prices';
 }
 
-render();
+loadCards();

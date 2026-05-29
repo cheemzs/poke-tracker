@@ -1,6 +1,4 @@
-modules = ["python-3.11"]
-[agent]
-expertMode = true
+modules = ["nodejs-20"]
 
 [workflows]
 runButton = "Project"
@@ -18,14 +16,17 @@ args = "Start application"
 name = "Start application"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python3 -m http.server 5000"
-waitForPort = 5000
-
 [workflows.workflow.metadata]
 outputType = "webview"
 
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node server.js"
+waitForPort = 5000
+
 [[ports]]
-localPort = 5000
+localPort = 3000
 externalPort = 80
+
+[agent]
+expertMode = true
