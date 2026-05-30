@@ -77,6 +77,19 @@
     <div class="metric"><div class="metric-label">Total profit/loss</div><div class="metric-value" id="s-profit">+SGD $0.00</div></div>
   </div>
 
+  <div id="movers-section" style="display:none; margin-bottom: 28px;">
+    <div class="movers-grid">
+      <div>
+        <p class="movers-label gainers-label">&#x1F4C8; Top gainers</p>
+        <div id="movers-gainers" class="movers-list"></div>
+      </div>
+      <div>
+        <p class="movers-label losers-label">&#x1F4C9; Biggest drops</p>
+        <div id="movers-losers" class="movers-list"></div>
+      </div>
+    </div>
+  </div>
+
   <div class="section-header">
     <span class="section-title">My cards</span>
     <div class="top-actions">
@@ -123,23 +136,26 @@
     </div>
   </div>
 
-  <div class="table-wrap">
+  <div class="table-wrap" id="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>Card name</th>
-          <th>Set</th>
+          <th onclick="sortBy('name')" class="sortable">Card name <span class="sort-arrow inactive">↕</span></th>
+          <th onclick="sortBy('set')" class="sortable">Set <span class="sort-arrow inactive">↕</span></th>
           <th>Grade</th>
-          <th>Purchase price</th>
-          <th>Current value</th>
-          <th>Profit / loss</th>
-          <th>Last updated</th>
+          <th onclick="sortBy('purchasePrice')" class="sortable">Purchase price <span class="sort-arrow inactive">↕</span></th>
+          <th onclick="sortBy('currentValue')" class="sortable">Current value <span class="sort-arrow inactive">↕</span></th>
+          <th onclick="sortBy('profit')" class="sortable">Profit / loss <span class="sort-arrow inactive">↕</span></th>
+          <th onclick="sortBy('lastUpdated')" class="sortable">Last updated <span class="sort-arrow inactive">↕</span></th>
           <th></th>
         </tr>
       </thead>
       <tbody id="card-table"></tbody>
     </table>
   </div>
+
+  <div class="card-list" id="card-list"></div>
+
   <p class="last-updated" id="last-updated"></p>
 
   <script src="script.js"></script>
