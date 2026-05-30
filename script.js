@@ -8,6 +8,7 @@ async function init() {
   const { username } = await res.json();
   document.getElementById('username-display').textContent = username;
   await loadCards();
+  checkAutoRefresh();
 }
 
 async function logout() {
@@ -20,6 +21,16 @@ async function loadCards() {
   if (!res.ok) { window.location.href = '/login.html'; return; }
   cards = await res.json();
   render();
+}
+
+async function checkAutoRefresh() {
+  if (cards.length === 0) return;
+  const lastRefresh = localStorage.getItem('lastRefresh');
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  if (!lastRefresh || parseInt(lastRefresh) < oneDayAgo) {
+    toast('Auto-refreshing prices...', 'info');
+    await refreshPrices(true);
+  }
 }
 
 function toast(message, type) {
@@ -123,7 +134,7 @@ function openCard(id) {
 
   const profitEl = document.getElementById('modal-profit');
   if (profit != null) {
-    profitEl.textContent = (profit >= 0 ? '+' : '') + 'SGD $' + profit.toFixed(2);
+    profitEl.textContent = (profit >= 0 ? '↑ +' : '↓ ') + 'SGD $' + Math.abs(profit).toFixed(2);
     profitEl.className = 'modal-stat-value ' + (profit >= 0 ? 'profit-pos' : 'profit-neg');
   } else {
     profitEl.textContent = '—';
@@ -180,10 +191,7 @@ function openCard(id) {
         },
         scales: {
           y: {
-            ticks: {
-              callback: v => 'SGD $' + v,
-              font: { size: 11 }
-            },
+            ticks: { callback: v => 'SGD $' + v, font: { size: 11 } },
             grid: { color: '#f0efea' }
           },
           x: {
@@ -215,21 +223,96 @@ function fmt(val) {
   return val != null ? 'SGD $' + Number(val).toFixed(2) : '—';
 }
 
+let sortCol = null;
+let sortDir = 1;
+
+function sortBy(col) {
+  if (sortCol === col) {
+    sortDir *= -1;
+  } else {
+    sortCol = col;
+    sortDir = 1;
+  }
+  render();
+}
+
+function getSortedCards() {
+  if (!sortCol) return [...cards];
+  return [...cards].sort((a, b) => {
+    let aVal, bVal;
+    if (sortCol === 'name') { aVal = a.name.toLowerCase(); bVal = b.name.toLowerCase(); }
+    else if (sortCol === 'set') { aVal = (a.set || '').toLowerCase(); bVal = (b.set || '').toLowerCase(); }
+    else if (sortCol === 'purchasePrice') { aVal = Number(a.purchasePrice); bVal = Number(b.purchasePrice); }
+    else if (sortCol === 'currentValue') { aVal = Number(a.currentValue || 0); bVal = Number(b.currentValue || 0); }
+    else if (sortCol === 'profit') {
+      aVal = a.currentValue != null ? Number(a.currentValue) - Number(a.purchasePrice) : -Infinity;
+      bVal = b.currentValue != null ? Number(b.currentValue) - Number(b.purchasePrice) : -Infinity;
+    }
+    else if (sortCol === 'lastUpdated') { aVal = a.lastUpdated || 0; bVal = b.lastUpdated || 0; }
+    if (aVal < bVal) return -1 * sortDir;
+    if (aVal > bVal) return 1 * sortDir;
+    return 0;
+  });
+}
+
+function sortArrow(col) {
+  if (sortCol !== col) return ' <span class="sort-arrow inactive">↕</span>';
+  return ' <span class="sort-arrow">' + (sortDir === 1 ? '↑' : '↓') + '</span>';
+}
+
+function renderMovers() {
+  const priced = cards.filter(c => c.currentValue != null);
+  if (priced.length < 2) {
+    document.getElementById('movers-section').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('movers-section').style.display = 'block';
+
+  const sorted = [...priced].sort((a, b) => {
+    const aPct = (Number(a.currentValue) - Number(a.purchasePrice)) / Number(a.purchasePrice);
+    const bPct = (Number(b.currentValue) - Number(b.purchasePrice)) / Number(b.purchasePrice);
+    return bPct - aPct;
+  });
+
+  const top = sorted.slice(0, 3);
+  const bottom = sorted.slice(-3).reverse();
+
+  function moverCard(c) {
+    const profit = Number(c.currentValue) - Number(c.purchasePrice);
+    const pct = (profit / Number(c.purchasePrice)) * 100;
+    const pos = profit >= 0;
+    return '<div class="mover-card" onclick="openCard(\'' + c.id + '\')">' +
+      '<div class="mover-name">' + esc(c.name) + '</div>' +
+      '<div class="mover-set">' + esc(c.set || '—') + '</div>' +
+      '<div class="mover-value ' + (pos ? 'profit-pos' : 'profit-neg') + '">' +
+        (pos ? '↑' : '↓') + ' ' + Math.abs(pct).toFixed(1) + '%' +
+        '<span class="mover-sgd"> ' + (pos ? '+' : '-') + 'SGD $' + Math.abs(profit).toFixed(2) + '</span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  document.getElementById('movers-gainers').innerHTML = top.map(moverCard).join('');
+  document.getElementById('movers-losers').innerHTML = bottom.map(moverCard).join('');
+}
+
 function render() {
   const tbody = document.getElementById('card-table');
+  const sorted = getSortedCards();
 
   if (cards.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">No cards yet — click "+ Add card" to get started</div></td></tr>';
     updateSummary();
+    renderMovers();
     return;
   }
 
-  tbody.innerHTML = cards.map(c => {
+  tbody.innerHTML = sorted.map(c => {
     const cost = Number(c.purchasePrice);
     const val = c.currentValue != null ? Number(c.currentValue) : null;
     const profit = val != null ? val - cost : null;
     const profitStr = profit != null
-      ? (profit >= 0 ? '+' : '') + 'SGD $' + Math.abs(profit).toFixed(2)
+      ? (profit >= 0 ? '↑ +' : '↓ ') + 'SGD $' + Math.abs(profit).toFixed(2)
       : '—';
     const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
     const gradeClass = c.grade === 'raw' ? 'badge-raw' : 'badge-psa';
@@ -248,6 +331,7 @@ function render() {
   }).join('');
 
   updateSummary();
+  renderMovers();
 }
 
 function esc(str) {
@@ -269,7 +353,7 @@ function updateSummary() {
   document.getElementById('s-value').textContent = 'SGD $' + value.toFixed(2);
 
   const pel = document.getElementById('s-profit');
-  pel.textContent = (profit >= 0 ? '+' : '-') + 'SGD $' + Math.abs(profit).toFixed(2);
+  pel.textContent = (profit >= 0 ? '↑ +' : '↓ -') + 'SGD $' + Math.abs(profit).toFixed(2);
   pel.className = 'metric-value ' + (profit >= 0 ? 'pos' : 'neg');
 }
 
@@ -311,8 +395,8 @@ async function fetchPrice(card) {
   return Math.round(priceUSD * USD_TO_SGD * 100) / 100;
 }
 
-async function refreshPrices() {
-  if (cards.length === 0) { toast('No cards to refresh.', 'info'); return; }
+async function refreshPrices(silent) {
+  if (cards.length === 0) { if (!silent) toast('No cards to refresh.', 'info'); return; }
   const btn = document.querySelector('.refresh-btn');
   btn.disabled = true;
   btn.textContent = '↻ Fetching...';
@@ -344,16 +428,19 @@ async function refreshPrices() {
     await new Promise(r => setTimeout(r, 800));
   }
 
+  localStorage.setItem('lastRefresh', Date.now().toString());
   render();
   const now = new Date().toLocaleString('en-SG');
   document.getElementById('last-updated').textContent = 'Last refreshed: ' + now;
   btn.disabled = false;
   btn.textContent = '↻ Refresh prices';
 
-  if (updated > 0) {
-    toast('Updated prices for ' + updated + ' card' + (updated > 1 ? 's' : '') + '.', 'success');
-  } else {
-    toast('No prices could be fetched. Check your PriceCharting URLs.', 'error');
+  if (!silent) {
+    if (updated > 0) {
+      toast('Updated prices for ' + updated + ' card' + (updated > 1 ? 's' : '') + '.', 'success');
+    } else {
+      toast('No prices could be fetched. Check your PriceCharting URLs.', 'error');
+    }
   }
 }
 
