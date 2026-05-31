@@ -78,19 +78,24 @@ async function addCard() {
   const grade = document.getElementById('f-grade').value;
   const price = parseFloat(document.getElementById('f-price').value);
   const url = document.getElementById('f-url').value.trim();
+
   if (!name) { toast('Please enter a card name.', 'error'); return; }
   if (!price || price <= 0) { toast('Please enter a valid purchase price.', 'error'); return; }
+
   const res = await fetch('/api/cards', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, set, grade, purchasePrice: price, currentValue: null, lastUpdated: null, url, priceHistory: [] })
   });
+
   if (!res.ok) { toast('Failed to save card. Please try again.', 'error'); return; }
+
   const card = await res.json();
   cards.push(card);
   render();
   toggleForm();
   toast(name + ' added to your collection.', 'success');
+
   document.getElementById('f-name').value = '';
   document.getElementById('f-set').value = '';
   document.getElementById('f-url').value = '';
@@ -112,16 +117,21 @@ async function deleteCard(id) {
 function openCard(id) {
   const card = cards.find(c => c.id === id);
   if (!card) return;
+
   const cost = Number(card.purchasePrice);
   const val = card.currentValue != null ? Number(card.currentValue) : null;
   const profit = val != null ? val - cost : null;
+
   document.getElementById('modal-name').textContent = card.name;
   document.getElementById('modal-meta').textContent = card.set || 'Unknown set';
+
   const gradeEl = document.getElementById('modal-grade');
   gradeEl.textContent = card.grade;
   gradeEl.className = 'badge ' + (card.grade === 'raw' ? 'badge-raw' : 'badge-psa');
+
   document.getElementById('modal-cost').textContent = 'SGD $' + cost.toFixed(2);
   document.getElementById('modal-value').textContent = val != null ? 'SGD $' + val.toFixed(2) : '—';
+
   const profitEl = document.getElementById('modal-profit');
   if (profit != null) {
     profitEl.textContent = (profit >= 0 ? '↑ +' : '↓ ') + 'SGD $' + Math.abs(profit).toFixed(2);
@@ -130,20 +140,27 @@ function openCard(id) {
     profitEl.textContent = '—';
     profitEl.className = 'modal-stat-value';
   }
+
   document.getElementById('modal-updated').textContent = card.lastUpdated
-    ? new Date(card.lastUpdated).toLocaleDateString('en-SG') : '—';
+    ? new Date(card.lastUpdated).toLocaleDateString('en-SG')
+    : '—';
+
   const history = card.priceHistory || [];
   const emptyEl = document.getElementById('modal-chart-empty');
   const chartContainer = document.querySelector('.modal-chart-container');
+
   if (history.length < 2) {
     emptyEl.style.display = 'block';
     chartContainer.style.display = 'none';
   } else {
     emptyEl.style.display = 'none';
     chartContainer.style.display = 'block';
+
     const labels = history.map(p => new Date(p.date).toLocaleDateString('en-SG'));
     const values = history.map(p => p.value);
+
     if (priceChart) { priceChart.destroy(); priceChart = null; }
+
     const ctx = document.getElementById('price-chart').getContext('2d');
     priceChart = new Chart(ctx, {
       type: 'line',
@@ -166,15 +183,26 @@ function openCard(id) {
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: ctx => 'SGD $' + Number(ctx.raw).toFixed(2) } }
+          tooltip: {
+            callbacks: {
+              label: ctx => 'SGD $' + Number(ctx.raw).toFixed(2)
+            }
+          }
         },
         scales: {
-          y: { ticks: { callback: v => 'SGD $' + v, font: { size: 11 } }, grid: { color: '#f0efea' } },
-          x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+          y: {
+            ticks: { callback: v => 'SGD $' + v, font: { size: 11 } },
+            grid: { color: '#f0efea' }
+          },
+          x: {
+            ticks: { font: { size: 11 } },
+            grid: { display: false }
+          }
         }
       }
     });
   }
+
   document.getElementById('modal-overlay').classList.add('active');
 }
 
@@ -199,7 +227,12 @@ let sortCol = null;
 let sortDir = 1;
 
 function sortBy(col) {
-  if (sortCol === col) { sortDir *= -1; } else { sortCol = col; sortDir = 1; }
+  if (sortCol === col) {
+    sortDir *= -1;
+  } else {
+    sortCol = col;
+    sortDir = 1;
+  }
   render();
 }
 
@@ -222,51 +255,69 @@ function getSortedCards() {
   });
 }
 
+function sortArrow(col) {
+  if (sortCol !== col) return ' <span class="sort-arrow inactive">↕</span>';
+  return ' <span class="sort-arrow">' + (sortDir === 1 ? '↑' : '↓') + '</span>';
+}
+
 function renderMovers() {
   const priced = cards.filter(c => c.currentValue != null);
-  if (priced.length < 2) { document.getElementById('movers-section').style.display = 'none'; return; }
+  if (priced.length < 2) {
+    document.getElementById('movers-section').style.display = 'none';
+    return;
+  }
+
   document.getElementById('movers-section').style.display = 'block';
+
   const sorted = [...priced].sort((a, b) => {
     const aPct = (Number(a.currentValue) - Number(a.purchasePrice)) / Number(a.purchasePrice);
     const bPct = (Number(b.currentValue) - Number(b.purchasePrice)) / Number(b.purchasePrice);
     return bPct - aPct;
   });
+
   const top = sorted.slice(0, 3);
   const bottom = sorted.slice(-3).reverse();
+
   function moverCard(c) {
     const profit = Number(c.currentValue) - Number(c.purchasePrice);
     const pct = (profit / Number(c.purchasePrice)) * 100;
     const pos = profit >= 0;
     return '<div class="mover-card" onclick="openCard(\'' + c.id + '\')">' +
-      '<div><div class="mover-name">' + esc(c.name) + '</div><div class="mover-set">' + esc(c.set || '—') + '</div></div>' +
+      '<div class="mover-name">' + esc(c.name) + '</div>' +
+      '<div class="mover-set">' + esc(c.set || '—') + '</div>' +
       '<div class="mover-value ' + (pos ? 'profit-pos' : 'profit-neg') + '">' +
         (pos ? '↑' : '↓') + ' ' + Math.abs(pct).toFixed(1) + '%' +
-        '<span class="mover-sgd">' + (pos ? '+' : '-') + 'SGD $' + Math.abs(profit).toFixed(2) + '</span>' +
-      '</div></div>';
+        '<span class="mover-sgd"> ' + (pos ? '+' : '-') + 'SGD $' + Math.abs(profit).toFixed(2) + '</span>' +
+      '</div>' +
+    '</div>';
   }
+
   document.getElementById('movers-gainers').innerHTML = top.map(moverCard).join('');
   document.getElementById('movers-losers').innerHTML = bottom.map(moverCard).join('');
 }
 
 function render() {
   const tbody = document.getElementById('card-table');
-  const cardList = document.getElementById('card-list');
   const sorted = getSortedCards();
+
   if (cards.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">No cards yet — click "+ Add card" to get started</div></td></tr>';
-    cardList.innerHTML = '<div class="empty-state">No cards yet — click "+ Add card" to get started</div>';
     updateSummary();
     renderMovers();
     return;
   }
+
   tbody.innerHTML = sorted.map(c => {
     const cost = Number(c.purchasePrice);
     const val = c.currentValue != null ? Number(c.currentValue) : null;
     const profit = val != null ? val - cost : null;
-    const profitStr = profit != null ? (profit >= 0 ? '↑ +' : '↓ ') + 'SGD $' + Math.abs(profit).toFixed(2) : '—';
+    const profitStr = profit != null
+      ? (profit >= 0 ? '↑ +' : '↓ ') + 'SGD $' + Math.abs(profit).toFixed(2)
+      : '—';
     const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
     const gradeClass = c.grade === 'raw' ? 'badge-raw' : 'badge-psa';
     const updated = c.lastUpdated ? new Date(c.lastUpdated).toLocaleDateString('en-SG') : '—';
+
     return '<tr class="card-row" onclick="openCard(\'' + c.id + '\')">' +
       '<td title="' + esc(c.name) + '">' + esc(c.name) + '</td>' +
       '<td title="' + esc(c.set || '—') + '">' + esc(c.set || '—') + '</td>' +
@@ -278,30 +329,17 @@ function render() {
       '<td><button class="del-btn" onclick="event.stopPropagation(); deleteCard(\'' + c.id + '\')" title="Delete">&#x2715;</button></td>' +
     '</tr>';
   }).join('');
-  cardList.innerHTML = sorted.map(c => {
-    const cost = Number(c.purchasePrice);
-    const val = c.currentValue != null ? Number(c.currentValue) : null;
-    const profit = val != null ? val - cost : null;
-    const profitStr = profit != null ? (profit >= 0 ? '↑ +' : '↓ -') + 'SGD $' + Math.abs(profit).toFixed(2) : '—';
-    const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
-    const gradeClass = c.grade === 'raw' ? 'badge-raw' : 'badge-psa';
-    return '<div class="mobile-card" onclick="openCard(\'' + c.id + '\')">' +
-      '<div class="mobile-card-top">' +
-        '<div><div class="mobile-card-name">' + esc(c.name) + '</div>' +
-        '<div class="mobile-card-set">' + esc(c.set || '—') + ' · <span class="badge ' + gradeClass + '">' + esc(c.grade) + '</span></div></div>' +
-        '<button class="mobile-card-delete" onclick="event.stopPropagation(); deleteCard(\'' + c.id + '\')" title="Delete">&#x2715;</button>' +
-      '</div>' +
-      '<div class="mobile-card-bottom">' +
-        '<div class="mobile-card-price">Paid: SGD $' + cost.toFixed(2) + '<br>Value: ' + fmt(val) + '</div>' +
-        '<div class="mobile-card-profit ' + profitClass + '">' + profitStr + '</div>' +
-      '</div></div>';
-  }).join('');
+
   updateSummary();
   renderMovers();
 }
 
 function esc(str) {
-  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function updateSummary() {
@@ -309,27 +347,52 @@ function updateSummary() {
   const cost = cards.reduce((s, c) => s + Number(c.purchasePrice), 0);
   const value = cards.reduce((s, c) => s + (c.currentValue != null ? Number(c.currentValue) : Number(c.purchasePrice)), 0);
   const profit = value - cost;
+
   document.getElementById('s-count').textContent = count;
   document.getElementById('s-cost').textContent = 'SGD $' + cost.toFixed(2);
   document.getElementById('s-value').textContent = 'SGD $' + value.toFixed(2);
+
   const pel = document.getElementById('s-profit');
   pel.textContent = (profit >= 0 ? '↑ +' : '↓ -') + 'SGD $' + Math.abs(profit).toFixed(2);
   pel.className = 'metric-value ' + (profit >= 0 ? 'pos' : 'neg');
 }
 
 async function fetchPrice(card) {
-  const urlMatch = card.url ? card.url.match(/\/([^\/]+)$/) : null;
-  const numberMatch = urlMatch ? urlMatch[1].match(/-(\d+)$/) : null;
+  if (!card.url) return null;
+  const urlMatch = card.url.match(/\/([^\/]+)$/);
+  if (!urlMatch) return null;
+
+  const numberMatch = urlMatch[1].match(/-(\d+)$/);
   const cardNumber = numberMatch ? numberMatch[1] : null;
-  const res = await fetch('/api/fetch-price', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cardName: card.name, setName: card.set, cardNumber, grade: card.grade })
-  });
+  const slug = urlMatch[1].replace(/-\d+$/, '').replace(/-/g, ' ');
+
+  const apiUrl = 'https://api.pokemontcg.io/v2/cards?q=name:%22' + encodeURIComponent(slug) + '%22&select=name,set,number,tcgplayer';
+  const res = await fetch(apiUrl);
   if (!res.ok) return null;
   const data = await res.json();
-  if (data.creditsRemaining !== undefined) console.log('Credits remaining:', data.creditsRemaining);
-  return data.price || null;
+
+  if (!data.data || data.data.length === 0) return null;
+
+  const match = data.data.find(c => cardNumber && c.number === cardNumber) || data.data[0];
+  const prices = match.tcgplayer ? match.tcgplayer.prices : null;
+  if (!prices) return null;
+
+  const base =
+    (prices.holofoil && prices.holofoil.market) ? prices.holofoil.market :
+    (prices.normal && prices.normal.market) ? prices.normal.market :
+    (prices.reverseHolofoil && prices.reverseHolofoil.market) ? prices.reverseHolofoil.market : null;
+
+  if (!base) return null;
+
+  const gradeStr = card.grade ? card.grade.toLowerCase() : 'raw';
+  let priceUSD = base;
+
+  if (gradeStr === 'psa 10' || gradeStr === 'bgs 10') priceUSD = base * 3.5;
+  else if (gradeStr === 'psa 9' || gradeStr === 'bgs 9.5') priceUSD = base * 1.5;
+  else if (gradeStr === 'psa 8' || gradeStr === 'bgs 9') priceUSD = base * 1.2;
+  else if (gradeStr === 'psa 7') priceUSD = base * 1.05;
+
+  return Math.round(priceUSD * USD_TO_SGD * 100) / 100;
 }
 
 async function refreshPrices(silent) {
@@ -337,6 +400,7 @@ async function refreshPrices(silent) {
   const btn = document.querySelector('.refresh-btn');
   btn.disabled = true;
   btn.textContent = '↻ Fetching...';
+
   let updated = 0;
   for (let i = 0; i < cards.length; i++) {
     try {
@@ -350,7 +414,11 @@ async function refreshPrices(silent) {
         await fetch('/api/cards/' + cards[i].id, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ currentValue: price, lastUpdated: now, priceHistory: cards[i].priceHistory })
+          body: JSON.stringify({
+            currentValue: price,
+            lastUpdated: now,
+            priceHistory: cards[i].priceHistory
+          })
         });
         updated++;
       }
@@ -359,14 +427,20 @@ async function refreshPrices(silent) {
     }
     await new Promise(r => setTimeout(r, 800));
   }
+
   localStorage.setItem('lastRefresh', Date.now().toString());
   render();
-  document.getElementById('last-updated').textContent = 'Last refreshed: ' + new Date().toLocaleString('en-SG');
+  const now = new Date().toLocaleString('en-SG');
+  document.getElementById('last-updated').textContent = 'Last refreshed: ' + now;
   btn.disabled = false;
   btn.textContent = '↻ Refresh prices';
+
   if (!silent) {
-    if (updated > 0) toast('Updated prices for ' + updated + ' card' + (updated > 1 ? 's' : '') + '.', 'success');
-    else toast('No prices could be fetched. Check your card names.', 'error');
+    if (updated > 0) {
+      toast('Updated prices for ' + updated + ' card' + (updated > 1 ? 's' : '') + '.', 'success');
+    } else {
+      toast('No prices could be fetched. Check your PriceCharting URLs.', 'error');
+    }
   }
 }
 
