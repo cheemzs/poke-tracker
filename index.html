@@ -61,7 +61,7 @@
 
   <div class="topbar">
     <div>
-      <h1>Card tracker</h1>
+      <h1>&#x1F4C8; Card tracker</h1>
       <p class="subtitle">Track your Pokémon card collection and portfolio value in SGD</p>
     </div>
     <div class="user-info">
@@ -93,6 +93,28 @@
   <div class="section-header">
     <span class="section-title">My cards</span>
     <div class="top-actions">
+      <div class="filter-wrap">
+        <select id="filter-type" onchange="applyFilter()">
+          <option value="">All types</option>
+          <option value="Fire">Fire</option>
+          <option value="Water">Water</option>
+          <option value="Grass">Grass</option>
+          <option value="Electric">Electric</option>
+          <option value="Psychic">Psychic</option>
+          <option value="Fighting">Fighting</option>
+          <option value="Dark">Dark</option>
+          <option value="Steel">Steel</option>
+          <option value="Dragon">Dragon</option>
+          <option value="Fairy">Fairy</option>
+          <option value="Normal">Normal</option>
+          <option value="Colorless">Colorless</option>
+        </select>
+        <select id="filter-movers" onchange="applyFilter()">
+          <option value="">All cards</option>
+          <option value="gainers">Top gainers</option>
+          <option value="losers">Biggest drops</option>
+        </select>
+      </div>
       <button class="refresh-btn" onclick="refreshPrices()">&#x21BB; Refresh prices</button>
       <button class="add-btn" onclick="toggleForm()">+ Add card</button>
     </div>
@@ -107,6 +129,24 @@
       <div class="form-group">
         <label>Set</label>
         <input type="text" id="f-set" placeholder="e.g. Fusion Strike" />
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <select id="f-type">
+          <option value="">Unknown</option>
+          <option value="Fire">Fire</option>
+          <option value="Water">Water</option>
+          <option value="Grass">Grass</option>
+          <option value="Electric">Electric</option>
+          <option value="Psychic">Psychic</option>
+          <option value="Fighting">Fighting</option>
+          <option value="Dark">Dark</option>
+          <option value="Steel">Steel</option>
+          <option value="Dragon">Dragon</option>
+          <option value="Fairy">Fairy</option>
+          <option value="Normal">Normal</option>
+          <option value="Colorless">Colorless</option>
+        </select>
       </div>
       <div class="form-group">
         <label>Grade / condition</label>
@@ -125,7 +165,7 @@
         <label>Purchase price (SGD)</label>
         <input type="number" id="f-price" placeholder="0.00" step="0.01" min="0" />
       </div>
-      <div class="form-group full">
+      <div class="form-group">
         <label>PriceCharting URL</label>
         <input type="text" id="f-url" placeholder="https://www.pricecharting.com/game/pokemon-.../card-123" />
       </div>
@@ -142,6 +182,7 @@
         <tr>
           <th onclick="sortBy('name')" class="sortable">Card name <span class="sort-arrow inactive">↕</span></th>
           <th onclick="sortBy('set')" class="sortable">Set <span class="sort-arrow inactive">↕</span></th>
+          <th>Type</th>
           <th>Grade</th>
           <th onclick="sortBy('purchasePrice')" class="sortable">Purchase price <span class="sort-arrow inactive">↕</span></th>
           <th onclick="sortBy('currentValue')" class="sortable">Current value <span class="sort-arrow inactive">↕</span></th>
@@ -155,7 +196,6 @@
   </div>
 
   <div class="card-list" id="card-list"></div>
-
   <p class="last-updated" id="last-updated"></p>
 
   <script src="script.js"></script>
