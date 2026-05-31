@@ -283,11 +283,13 @@ function renderMovers() {
     const pct = (profit / Number(c.purchasePrice)) * 100;
     const pos = profit >= 0;
     return '<div class="mover-card" onclick="openCard(\'' + c.id + '\')">' +
-      '<div class="mover-name">' + esc(c.name) + '</div>' +
-      '<div class="mover-set">' + esc(c.set || '—') + '</div>' +
+      '<div>' +
+        '<div class="mover-name">' + esc(c.name) + '</div>' +
+        '<div class="mover-set">' + esc(c.set || '—') + '</div>' +
+      '</div>' +
       '<div class="mover-value ' + (pos ? 'profit-pos' : 'profit-neg') + '">' +
         (pos ? '↑' : '↓') + ' ' + Math.abs(pct).toFixed(1) + '%' +
-        '<span class="mover-sgd"> ' + (pos ? '+' : '-') + 'SGD $' + Math.abs(profit).toFixed(2) + '</span>' +
+        '<span class="mover-sgd">' + (pos ? '+' : '-') + 'SGD $' + Math.abs(profit).toFixed(2) + '</span>' +
       '</div>' +
     '</div>';
   }
@@ -298,15 +300,18 @@ function renderMovers() {
 
 function render() {
   const tbody = document.getElementById('card-table');
+  const cardList = document.getElementById('card-list');
   const sorted = getSortedCards();
 
   if (cards.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">No cards yet — click "+ Add card" to get started</div></td></tr>';
+    cardList.innerHTML = '<div class="empty-state">No cards yet — click "+ Add card" to get started</div>';
     updateSummary();
     renderMovers();
     return;
   }
 
+  // Desktop table
   tbody.innerHTML = sorted.map(c => {
     const cost = Number(c.purchasePrice);
     const val = c.currentValue != null ? Number(c.currentValue) : null;
@@ -328,6 +333,32 @@ function render() {
       '<td>' + updated + '</td>' +
       '<td><button class="del-btn" onclick="event.stopPropagation(); deleteCard(\'' + c.id + '\')" title="Delete">&#x2715;</button></td>' +
     '</tr>';
+  }).join('');
+
+  // Mobile card list
+  cardList.innerHTML = sorted.map(c => {
+    const cost = Number(c.purchasePrice);
+    const val = c.currentValue != null ? Number(c.currentValue) : null;
+    const profit = val != null ? val - cost : null;
+    const profitStr = profit != null
+      ? (profit >= 0 ? '↑ +' : '↓ -') + 'SGD $' + Math.abs(profit).toFixed(2)
+      : '—';
+    const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
+    const gradeClass = c.grade === 'raw' ? 'badge-raw' : 'badge-psa';
+
+    return '<div class="mobile-card" onclick="openCard(\'' + c.id + '\')">' +
+      '<div class="mobile-card-top">' +
+        '<div>' +
+          '<div class="mobile-card-name">' + esc(c.name) + '</div>' +
+          '<div class="mobile-card-set">' + esc(c.set || '—') + ' · <span class="badge ' + gradeClass + '">' + esc(c.grade) + '</span></div>' +
+        '</div>' +
+        '<button class="mobile-card-delete" onclick="event.stopPropagation(); deleteCard(\'' + c.id + '\')" title="Delete">&#x2715;</button>' +
+      '</div>' +
+      '<div class="mobile-card-bottom">' +
+        '<div class="mobile-card-price">Paid: SGD $' + cost.toFixed(2) + '<br>Value: ' + fmt(val) + '</div>' +
+        '<div class="mobile-card-profit ' + profitClass + '">' + profitStr + '</div>' +
+      '</div>' +
+    '</div>';
   }).join('');
 
   updateSummary();
