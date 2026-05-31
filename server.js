@@ -25,12 +25,24 @@ function requireAuth(req, res, next) {
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
-  const { data: existing } = await supabase.from('users').select('id').ilike('username', username).single();
+
+  const { data: existing } = await supabase
+    .from('users')
+    .select('id')
+    .ilike('username', username)
+    .single();
+
   if (existing) return res.status(400).json({ error: 'Username already taken' });
+
   const hash = await bcrypt.hash(password, 10);
   const id = Date.now().toString();
-  const { error } = await supabase.from('users').insert([{ id, username, password: hash }]);
+
+  const { error } = await supabase
+    .from('users')
+    .insert([{ id, username, password: hash }]);
+
   if (error) return res.status(500).json({ error: 'Failed to create account' });
+
   req.session.userId = id;
   req.session.username = username;
   res.json({ username });
@@ -38,10 +50,17 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
-  const { data: user } = await supabase.from('users').select('*').ilike('username', username).single();
+
+  const { data: user } = await supabase
+    .from('users')
+    .select('*')
+    .ilike('username', username)
+    .single();
+
   if (!user || !(await bcrypt.compare(password, user.password))) {
     return res.status(401).json({ error: 'Invalid username or password' });
   }
+
   req.session.userId = user.id;
   req.session.username = user.username;
   res.json({ username: user.username });
@@ -63,7 +82,9 @@ app.get('/api/cards', requireAuth, async (req, res) => {
     .select('*')
     .eq('user_id', req.session.userId)
     .order('id', { ascending: true });
+
   if (error) return res.status(500).json({ error: 'Failed to fetch cards' });
+
   const mapped = data.map(c => ({
     id: c.id,
     name: c.name,
@@ -75,73 +96,62 @@ app.get('/api/cards', requireAuth, async (req, res) => {
     url: c.url,
     priceHistory: c.price_history || []
   }));
+
   res.json(mapped);
 });
 
 app.post('/api/cards', requireAuth, async (req, res) => {
   const { name, set, grade, purchasePrice, currentValue, lastUpdated, url, priceHistory } = req.body;
   const id = Date.now().toString();
-  const { error } = await supabase.from('cards').insert([{
-    id,
-    user_id: req.session.userId,
-    name,
-    set_name: set,
-    grade,
-    purchase_price: purchasePrice,
-    current_value: currentValue,
-    last_updated: lastUpdated,
-    url,
-    price_history: priceHistory || []
-  }]);
+
+  const { error } = await supabase
+    .from('cards')
+    .insert([{
+      id,
+      user_id: req.session.userId,
+      name,
+      set_name: set,
+      grade,
+      purchase_price: purchasePrice,
+      current_value: currentValue,
+      last_updated: lastUpdated,
+      url,
+      price_history: priceHistory || []
+    }]);
+
   if (error) return res.status(500).json({ error: 'Failed to save card' });
+
   res.json({ id, name, set, grade, purchasePrice, currentValue, lastUpdated, url, priceHistory: priceHistory || [] });
 });
 
 app.put('/api/cards/:id', requireAuth, async (req, res) => {
   const { currentValue, lastUpdated, priceHistory } = req.body;
-  const { error } = await supabase.from('cards').update({
-    current_value: currentValue,
-    last_updated: lastUpdated,
-    price_history: priceHistory
-  }).eq('id', req.params.id).eq('user_id', req.session.userId);
+
+  const { error } = await supabase
+    .from('cards')
+    .update({
+      current_value: currentValue,
+      last_updated: lastUpdated,
+      price_history: priceHistory
+    })
+    .eq('id', req.params.id)
+    .eq('user_id', req.session.userId);
+
   if (error) return res.status(500).json({ error: 'Failed to update card' });
   res.json({ ok: true });
 });
 
 app.delete('/api/cards/:id', requireAuth, async (req, res) => {
-  const { error } = await supabase.from('cards').delete().eq('id', req.params.id).eq('user_id', req.session.userId);
+  const { error } = await supabase
+    .from('cards')
+    .delete()
+    .eq('id', req.params.id)
+    .eq('user_id', req.session.userId);
+
   if (error) return res.status(500).json({ error: 'Failed to delete card' });
   res.json({ ok: true });
 });
 
-app.post('/api/fetch-price', requireAuth, async (req, res) => {
-  const { cardName, setName, cardNumber, grade } = req.body;
-  try {
-    const { JustTCG } = require('justtcg-js');
-    const client = new JustTCG();
-    const response = await client.v1.cards.get({ game: 'Pokemon', name: cardName, limit: 20 });
-    if (response.error) return res.status(400).json({ error: response.error });
-    const cards = response.data;
-    if (!cards || cards.length === 0) return res.json({ price: null });
-    let card = cards.find(c => c.number === cardNumber);
-    if (!card) card = cards.find(c => c.set_name && setName && c.set_name.toLowerCase().includes(setName.toLowerCase()));
-    if (!card) card = cards[0];
-    const variants = card.variants || [];
-    const variant = variants.find(v => v.condition === 'Near Mint') || variants[0];
-    if (!variant) return res.json({ price: null });
-    let priceUSD = variant.price;
-    const gradeStr = grade ? grade.toLowerCase() : 'raw';
-    if (gradeStr === 'psa 10' || gradeStr === 'bgs 10') priceUSD *= 3.5;
-    else if (gradeStr === 'psa 9' || gradeStr === 'bgs 9.5') priceUSD *= 1.5;
-    else if (gradeStr === 'psa 8' || gradeStr === 'bgs 9') priceUSD *= 1.2;
-    else if (gradeStr === 'psa 7') priceUSD *= 1.05;
-    const priceSGD = Math.round(priceUSD * 1.35 * 100) / 100;
-    res.json({ price: priceSGD, creditsRemaining: response.usage.apiDailyRequestsRemaining });
-  } catch (e) {
-    console.error('JustTCG error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-
 app.use(express.static('.'));
+
 app.listen(5000, () => console.log('Running on port 5000'));
