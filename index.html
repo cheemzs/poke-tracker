@@ -65,6 +65,7 @@
       </div>
       <div class="modal-actions">
         <button class="btn-sell" onclick="openSellForm()">Mark as sold</button>
+        <button class="btn-manual-price" onclick="openManualPrice()">Set price manually</button>
         <button class="btn-edit" onclick="openEditForm()">Edit card</button>
       </div>
     </div>
@@ -133,8 +134,8 @@
           <input type="number" id="edit-target" step="0.01" min="0" />
         </div>
         <div class="form-group full">
-          <label>PriceCharting URL</label>
-          <input type="text" id="edit-url" />
+          <label>PriceCharting URL <span style="color:var(--text3); font-weight:400;">(optional)</span></label>
+          <input type="text" id="edit-url" placeholder="Leave blank — prices now fetched by name automatically" />
         </div>
         <div class="form-group full">
           <label>Notes</label>
@@ -175,13 +176,31 @@
     </div>
   </div>
 
+  <!-- Manual price modal -->
+  <div class="modal-overlay" id="manual-price-overlay">
+    <div class="modal" style="max-width:380px;">
+      <button class="modal-close" onclick="closeManualPriceModal()">✕</button>
+      <h2 style="font-size:16px; font-weight:600; margin-bottom:8px; letter-spacing:0.05em; text-transform:uppercase;">Set price manually</h2>
+      <p style="font-size:12px; color:var(--text3); font-family:var(--font-mono); margin-bottom:20px;">Override the current value for this card. Useful when auto-fetch can't find it.</p>
+      <input type="hidden" id="manual-price-id" />
+      <div class="form-group" style="margin-bottom:20px;">
+        <label>Current value (SGD)</label>
+        <input type="number" id="manual-price-val" step="0.01" min="0" placeholder="0.00" />
+      </div>
+      <div class="form-actions">
+        <button class="btn-cancel" onclick="closeManualPriceModal()">Cancel</button>
+        <button class="btn-primary" onclick="saveManualPrice()">Save price</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Confirm dialog -->
   <div class="modal-overlay" id="confirm-overlay">
     <div class="modal confirm-modal">
       <p class="confirm-message" id="confirm-message"></p>
       <div class="confirm-actions">
         <button class="btn-cancel" id="confirm-cancel">Cancel</button>
-        <button class="btn-danger" id="confirm-ok">Remove</button>
+        <button class="btn-danger" id="confirm-ok">Confirm</button>
       </div>
     </div>
   </div>
@@ -285,6 +304,12 @@
     <div id="panel-active">
       <div class="controls-bar">
         <div class="controls-left">
+          <!-- Search -->
+          <div class="search-wrap">
+            <span class="search-icon">⌕</span>
+            <input type="text" id="search-input" class="search-input" placeholder="Search cards or sets…" oninput="applySearch()" />
+          </div>
+          <!-- Filters -->
           <div class="filter-group">
             <select id="filter-type" onchange="applyFilter()" class="filter-select">
               <option value="">All types</option>
@@ -301,6 +326,9 @@
               <option value="Normal">⭐ Normal</option>
               <option value="Colorless">🌀 Colorless</option>
             </select>
+            <select id="filter-set" onchange="applyFilter()" class="filter-select">
+              <option value="">All sets</option>
+            </select>
             <select id="filter-movers" onchange="applyFilter()" class="filter-select">
               <option value="">All cards</option>
               <option value="gainers">↑ Top gainers</option>
@@ -310,6 +338,8 @@
         </div>
         <div class="controls-right">
           <button class="btn-refresh" onclick="refreshPrices()">↻ Refresh prices</button>
+          <button class="btn-export" onclick="exportCSV()" title="Export to CSV">↓ Export</button>
+          <button class="btn-reset" onclick="resetVault()" title="Delete all cards">⚠ Reset</button>
           <button class="btn-add" onclick="toggleForm()">+ Add card</button>
         </div>
       </div>
@@ -319,11 +349,11 @@
         <div class="form-grid">
           <div class="form-group">
             <label>Card name</label>
-            <input type="text" id="f-name" placeholder="e.g. Mew V" />
+            <input type="text" id="f-name" placeholder="e.g. Mew ex" />
           </div>
           <div class="form-group">
             <label>Set</label>
-            <input type="text" id="f-set" placeholder="e.g. Fusion Strike" />
+            <input type="text" id="f-set" placeholder="e.g. Paldean Fates" />
           </div>
           <div class="form-group">
             <label>Type</label>
@@ -373,8 +403,8 @@
             <input type="number" id="f-target" placeholder="0.00" step="0.01" min="0" />
           </div>
           <div class="form-group full">
-            <label>PriceCharting URL</label>
-            <input type="text" id="f-url" placeholder="https://www.pricecharting.com/game/pokemon-.../card-123" />
+            <label>PriceCharting URL <span style="color:var(--text3); font-weight:400;">(optional — prices now auto-fetched by name)</span></label>
+            <input type="text" id="f-url" placeholder="https://www.pricecharting.com/… (leave blank)" />
           </div>
           <div class="form-group full">
             <label>Notes</label>
@@ -400,6 +430,7 @@
               <th onclick="sortBy('currentValue')" class="sortable">Value <span class="sort-arr">↕</span></th>
               <th onclick="sortBy('profit')" class="sortable">P/L <span class="sort-arr">↕</span></th>
               <th onclick="sortBy('lastUpdated')" class="sortable">Updated <span class="sort-arr">↕</span></th>
+              <th></th>
               <th></th>
             </tr>
           </thead>
@@ -433,7 +464,7 @@
       <div class="card-list" id="sold-list"></div>
     </div>
 
-    <p class="last-updated" id="last-updated"></p>
+    <p class="last-updated" id="last-updated"><span id="fx-rate"></span></p>
   </main>
 
   <script src="script.js"></script>
