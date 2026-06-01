@@ -70,17 +70,25 @@ app.get('/api/cards', requireAuth, async (req, res) => {
     set: c.set_name,
     type: c.type,
     grade: c.grade,
+    quantity: c.quantity || 1,
     purchasePrice: c.purchase_price,
+    purchaseDate: c.purchase_date,
+    targetPrice: c.target_price,
+    notes: c.notes,
     currentValue: c.current_value,
     lastUpdated: c.last_updated,
     url: c.url,
-    priceHistory: c.price_history || []
+    priceHistory: c.price_history || [],
+    sold: c.sold || false,
+    soldPrice: c.sold_price,
+    soldDate: c.sold_date,
+    soldTo: c.sold_to
   }));
   res.json(mapped);
 });
 
 app.post('/api/cards', requireAuth, async (req, res) => {
-  const { name, set, type, grade, purchasePrice, currentValue, lastUpdated, url, priceHistory } = req.body;
+  const { name, set, type, grade, quantity, purchasePrice, purchaseDate, targetPrice, notes, currentValue, lastUpdated, url, priceHistory } = req.body;
   const id = Date.now().toString();
   const { error } = await supabase.from('cards').insert([{
     id,
@@ -89,14 +97,19 @@ app.post('/api/cards', requireAuth, async (req, res) => {
     set_name: set,
     type,
     grade,
+    quantity: quantity || 1,
     purchase_price: purchasePrice,
+    purchase_date: purchaseDate,
+    target_price: targetPrice,
+    notes,
     current_value: currentValue,
     last_updated: lastUpdated,
     url,
-    price_history: priceHistory || []
+    price_history: priceHistory || [],
+    sold: false
   }]);
   if (error) return res.status(500).json({ error: 'Failed to save card' });
-  res.json({ id, name, set, type, grade, purchasePrice, currentValue, lastUpdated, url, priceHistory: priceHistory || [] });
+  res.json({ id, name, set, type, grade, quantity: quantity || 1, purchasePrice, purchaseDate, targetPrice, notes, currentValue, lastUpdated, url, priceHistory: priceHistory || [], sold: false });
 });
 
 app.put('/api/cards/:id', requireAuth, async (req, res) => {
@@ -111,23 +124,31 @@ app.put('/api/cards/:id', requireAuth, async (req, res) => {
 });
 
 app.patch('/api/cards/:id', requireAuth, async (req, res) => {
-  const { name, set, type, grade, purchasePrice, url } = req.body;
-  const { error } = await supabase.from('cards').update({
-    name,
-    set_name: set,
-    type,
-    grade,
-    purchase_price: purchasePrice,
-    url
-  }).eq('id', req.params.id).eq('user_id', req.session.userId);
+  const { name, set, type, grade, quantity, purchasePrice, purchaseDate, targetPrice, notes, url, sold, soldPrice, soldDate, soldTo } = req.body;
+  const update = {};
+  if (name !== undefined) update.name = name;
+  if (set !== undefined) update.set_name = set;
+  if (type !== undefined) update.type = type;
+  if (grade !== undefined) update.grade = grade;
+  if (quantity !== undefined) update.quantity = quantity;
+  if (purchasePrice !== undefined) update.purchase_price = purchasePrice;
+  if (purchaseDate !== undefined) update.purchase_date = purchaseDate;
+  if (targetPrice !== undefined) update.target_price = targetPrice;
+  if (notes !== undefined) update.notes = notes;
+  if (url !== undefined) update.url = url;
+  if (sold !== undefined) update.sold = sold;
+  if (soldPrice !== undefined) update.sold_price = soldPrice;
+  if (soldDate !== undefined) update.sold_date = soldDate;
+  if (soldTo !== undefined) update.sold_to = soldTo;
+  const { error } = await supabase.from('cards').update(update)
+    .eq('id', req.params.id).eq('user_id', req.session.userId);
   if (error) return res.status(500).json({ error: 'Failed to update card' });
   res.json({ ok: true });
 });
 
 app.delete('/api/cards/:id', requireAuth, async (req, res) => {
   const { error } = await supabase.from('cards').delete()
-    .eq('id', req.params.id)
-    .eq('user_id', req.session.userId);
+    .eq('id', req.params.id).eq('user_id', req.session.userId);
   if (error) return res.status(500).json({ error: 'Failed to delete card' });
   res.json({ ok: true });
 });
