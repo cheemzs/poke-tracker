@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PokeVault — Stats</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <header class="site-header" id="site-header">
+    <div class="header-inner">
+      <div class="header-brand">
+        <div class="brand-logo">⬡</div>
+        <div>
+          <div class="brand-name">PokeVault</div>
+          <div class="brand-sub">Card Portfolio Tracker</div>
+        </div>
+      </div>
+      <nav class="header-nav">
+        <a href="/" class="nav-link">Collection</a>
+        <a href="/stats.html" class="nav-link active">Stats</a>
+      </nav>
+      <div class="header-right">
+        <div class="header-controls">
+          <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme">◐</button>
+          <span class="header-username" id="username-display"></span>
+          <button class="logout-btn" onclick="logout()">Log out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="section-label" style="margin-bottom:24px;">Portfolio analytics</div>
+
+    <!-- Top stats -->
+    <div class="summary-grid" style="margin-bottom:32px;">
+      <div class="metric-card">
+        <div class="metric-icon">📊</div>
+        <div class="metric-body">
+          <div class="metric-label">Total realised</div>
+          <div class="metric-value" id="stat-realised">$0.00</div>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon">📈</div>
+        <div class="metric-body">
+          <div class="metric-label">Unrealised P/L</div>
+          <div class="metric-value" id="stat-unrealised">$0.00</div>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon">🏆</div>
+        <div class="metric-body">
+          <div class="metric-label">Best ROI card</div>
+          <div class="metric-value" id="stat-best-roi" style="font-size:14px;">—</div>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon">📉</div>
+        <div class="metric-body">
+          <div class="metric-label">Worst ROI card</div>
+          <div class="metric-value" id="stat-worst-roi" style="font-size:14px;">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts row -->
+    <div class="stats-grid">
+
+      <!-- Portfolio value over time -->
+      <div class="stats-card stats-card-wide">
+        <div class="stats-card-title">Portfolio value over time (SGD)</div>
+        <div style="height:220px; position:relative;">
+          <canvas id="chart-portfolio"></canvas>
+        </div>
+        <p class="modal-chart-empty" id="portfolio-empty" style="display:none;">Refresh prices a few times to build up history</p>
+      </div>
+
+      <!-- Value by grade -->
+      <div class="stats-card">
+        <div class="stats-card-title">Value by grade</div>
+        <div style="height:220px; position:relative;">
+          <canvas id="chart-grade"></canvas>
+        </div>
+      </div>
+
+      <!-- Best performers -->
+      <div class="stats-card">
+        <div class="stats-card-title">↑ Top 5 by ROI</div>
+        <div id="best-performers" class="performers-list"></div>
+      </div>
+
+      <!-- Worst performers -->
+      <div class="stats-card">
+        <div class="stats-card-title">↓ Worst 5 by ROI</div>
+        <div id="worst-performers" class="performers-list"></div>
+      </div>
+
+      <!-- Realised gains breakdown -->
+      <div class="stats-card stats-card-wide">
+        <div class="stats-card-title">Realised gains — sold cards</div>
+        <div id="sold-breakdown" class="sold-breakdown-list"></div>
+        <p class="modal-chart-empty" id="sold-empty" style="display:none;">No sold cards yet</p>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    const USD_TO_SGD = 1.35;
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    }
+
+    async function logout() {
+      await fetch('/api/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    }
+
+    window.addEventListener('scroll', () => {
+      const header = document.getElementById('site-header');
+      if (header) header.classList.toggle('scrolled', window.scrollY > 20);
+    });
+
+    async function init() {
+      const res = await fetch('/api/me');
+      if (!res.ok) { window.location.href = '/login.html'; return; }
+      const { username } = await res.json();
+      document.getElementById('username-display').textContent = username;
+
+      const cardsRes = await fetch('/api/cards');
+      if (!cardsRes.ok) { window.location.href = '/login.html'; return; }
+      const cards = await cardsRes.json();
+
+      renderStats(cards);
+    }
+
+    function renderStats(cards) {
+      const active = cards.filter(c => !c.sold);
+      const sold = cards.filter(c => c.sold);
+
+      // Realised gains
+      const realised = sold.reduce((s, c) => {
+        const gain = (Number(c.soldPrice) - Number(c.purchasePrice)) * (c.quantity || 1);
+        return s + gain;
+      }, 0);
+
+      // Unrealised
+      const unrealised = active.reduce((s, c) => {
+        if (c.currentValue == null) return s;
+        return s + (Number(c.currentValue) - Number(c.purchasePrice)) * (c.quantity || 1);
+      }, 0);
+
+      document.getElementById('stat-realised').textContent = (realised >= 0 ? '+' : '') + 'SGD $' + Math.abs(realised).toFixed(2);
+      document.getElementById('stat-realised').className = 'metric-value ' + (realised >= 0 ? 'pos' : 'neg');
+      document.getElementById('stat-unrealised').textContent = (unrealised >= 0 ? '+' : '') + 'SGD $' + Math.abs(unrealised).toFixed(2);
+      document.getElementById('stat-unrealised').className = 'metric-value ' + (unrealised >= 0 ? 'pos' : 'neg');
+
+      // ROI rankings
+      const withROI = active.filter(c => c.currentValue != null).map(c => ({
+        ...c,
+        roi: ((Number(c.currentValue) - Number(c.purchasePrice)) / Number(c.purchasePrice)) * 100
+      })).sort((a, b) => b.roi - a.roi);
+
+      if (withROI.length > 0) {
+        const best = withROI[0];
+        const worst = withROI[withROI.length - 1];
+        document.getElementById('stat-best-roi').textContent = best.name + ' (' + best.roi.toFixed(1) + '%)';
+        document.getElementById('stat-best-roi').className = 'metric-value pos';
+        document.getElementById('stat-worst-roi').textContent = worst.name + ' (' + worst.roi.toFixed(1) + '%)';
+        document.getElementById('stat-worst-roi').className = 'metric-value neg';
+      }
+
+      // Portfolio over time chart
+      buildPortfolioChart(active);
+
+      // Grade chart
+      buildGradeChart(active);
+
+      // Performers
+      buildPerformers(withROI);
+
+      // Sold breakdown
+      buildSoldBreakdown(sold);
+    }
+
+    function buildPortfolioChart(cards) {
+      const allDates = {};
+      cards.forEach(c => {
+        (c.priceHistory || []).forEach(p => {
+          const day = new Date(p.date).toLocaleDateString('en-SG');
+          allDates[day] = (allDates[day] || 0) + p.value * (c.quantity || 1);
+        });
+      });
+      const labels = Object.keys(allDates).sort((a, b) => new Date(a) - new Date(b));
+      const values = labels.map(l => allDates[l]);
+
+      if (labels.length < 2) {
+        document.getElementById('portfolio-empty').style.display = 'block';
+        return;
+      }
+
+      const ctx = document.getElementById('chart-portfolio').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            data: values,
+            borderColor: '#c9a84c',
+            backgroundColor: 'rgba(201,168,76,0.08)',
+            borderWidth: 2,
+            pointRadius: 3,
+            pointBackgroundColor: '#c9a84c',
+            tension: 0.4,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => 'SGD $' + Number(ctx.raw).toFixed(2) } } },
+          scales: {
+            y: { ticks: { callback: v => '$' + v, font: { size: 11, family: 'DM Mono' }, color: '#555a6e' }, grid: { color: 'rgba(255,255,255,0.07)' }, border: { display: false } },
+            x: { ticks: { font: { size: 11, family: 'DM Mono' }, color: '#555a6e' }, grid: { display: false }, border: { display: false } }
+          }
+        }
+      });
+    }
+
+    function buildGradeChart(cards) {
+      const grades = {};
+      cards.forEach(c => {
+        const g = c.grade || 'raw';
+        const val = (c.currentValue != null ? Number(c.currentValue) : Number(c.purchasePrice)) * (c.quantity || 1);
+        grades[g] = (grades[g] || 0) + val;
+      });
+      const labels = Object.keys(grades);
+      const values = labels.map(l => grades[l]);
+      const colors = ['#c9a84c', '#4a90d9', '#4caf50', '#dc50a0', '#ff6432', '#ffc800', '#503c78', '#788ca0'];
+
+      const ctx = document.getElementById('chart-grade').getContext('2d');
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderWidth: 0 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'right', labels: { font: { size: 11, family: 'DM Mono' }, color: '#8b90a0', boxWidth: 12 } },
+            tooltip: { callbacks: { label: ctx => ctx.label + ': SGD $' + Number(ctx.raw).toFixed(2) } }
+          }
+        }
+      });
+    }
+
+    function buildPerformers(withROI) {
+      const top5 = withROI.slice(0, 5);
+      const bottom5 = withROI.slice(-5).reverse();
+
+      function row(c) {
+        const pos = c.roi >= 0;
+        return '<div class="performer-row">' +
+          '<div class="performer-name">' + esc(c.name) + '<span class="performer-set">' + esc(c.set || '—') + '</span></div>' +
+          '<div class="performer-roi ' + (pos ? 'profit-pos' : 'profit-neg') + '">' + (pos ? '+' : '') + c.roi.toFixed(1) + '%</div>' +
+        '</div>';
+      }
+
+      const bestEl = document.getElementById('best-performers');
+      const worstEl = document.getElementById('worst-performers');
+      bestEl.innerHTML = top5.length ? top5.map(row).join('') : '<p style="color:var(--text3); font-size:12px; font-family:var(--font-mono); padding:16px 0;">Not enough data yet</p>';
+      worstEl.innerHTML = bottom5.length ? bottom5.map(row).join('') : '<p style="color:var(--text3); font-size:12px; font-family:var(--font-mono); padding:16px 0;">Not enough data yet</p>';
+    }
+
+    function buildSoldBreakdown(sold) {
+      if (sold.length === 0) {
+        document.getElementById('sold-empty').style.display = 'block';
+        return;
+      }
+      document.getElementById('sold-breakdown').innerHTML = sold.map(c => {
+        const profit = (Number(c.soldPrice) - Number(c.purchasePrice)) * (c.quantity || 1);
+        const pos = profit >= 0;
+        return '<div class="sold-breakdown-row">' +
+          '<div><div class="performer-name">' + esc(c.name) + '<span class="performer-set">' + esc(c.set || '—') + '</span></div>' +
+          '<div style="font-size:11px; color:var(--text3); font-family:var(--font-mono); margin-top:2px;">' +
+            (c.soldDate || '—') + (c.soldTo ? ' · ' + esc(c.soldTo) : '') +
+          '</div></div>' +
+          '<div style="text-align:right;">' +
+            '<div style="font-family:var(--font-mono); font-size:13px;">SGD $' + Number(c.soldPrice).toFixed(2) + '</div>' +
+            '<div class="performer-roi ' + (pos ? 'profit-pos' : 'profit-neg') + '">' + (pos ? '+' : '') + 'SGD $' + profit.toFixed(2) + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function esc(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
