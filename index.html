@@ -301,48 +301,47 @@
     </div>
 
     <!-- Active collection -->
-    <div id="panel-active">
-      <div class="controls-bar">
-        <div class="controls-left">
-          <!-- Search -->
-          <div class="search-wrap">
-            <span class="search-icon">⌕</span>
-            <input type="text" id="search-input" class="search-input" placeholder="Search cards or sets…" oninput="applySearch()" />
-          </div>
-          <!-- Filters -->
-          <div class="filter-group">
-            <select id="filter-type" onchange="applyFilter()" class="filter-select">
-              <option value="">All types</option>
-              <option value="Fire">🔥 Fire</option>
-              <option value="Water">💧 Water</option>
-              <option value="Grass">🌿 Grass</option>
-              <option value="Electric">⚡ Electric</option>
-              <option value="Psychic">🔮 Psychic</option>
-              <option value="Fighting">🥊 Fighting</option>
-              <option value="Dark">🌑 Dark</option>
-              <option value="Steel">⚙️ Steel</option>
-              <option value="Dragon">🐉 Dragon</option>
-              <option value="Fairy">✨ Fairy</option>
-              <option value="Normal">⭐ Normal</option>
-              <option value="Colorless">🌀 Colorless</option>
-            </select>
-            <select id="filter-set" onchange="applyFilter()" class="filter-select">
-              <option value="">All sets</option>
-            </select>
-            <select id="filter-movers" onchange="applyFilter()" class="filter-select">
-              <option value="">All cards</option>
-              <option value="gainers">↑ Top gainers</option>
-              <option value="losers">↓ Biggest drops</option>
-            </select>
-          </div>
-        </div>
-        <div class="controls-right">
-          <button class="btn-refresh" onclick="refreshPrices()">↻ Refresh prices</button>
-          <button class="btn-export" onclick="exportCSV()" title="Export to CSV">↓ Export</button>
-          <button class="btn-reset" onclick="resetVault()" title="Delete all cards">⚠ Reset</button>
-          <button class="btn-add" onclick="toggleForm()">+ Add card</button>
-        </div>
+   <!-- Active collection -->
+<div id="panel-active">
+  <div class="controls-bar">
+    <div class="controls-left">
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" id="search-input" class="search-input" placeholder="Search cards or sets…" oninput="applySearch()" />
       </div>
+      <div class="filter-group">
+        <select id="filter-type" onchange="applyFilter()" class="filter-select">
+          <option value="">All types</option>
+          <option value="Fire">🔥 Fire</option>
+          <option value="Water">💧 Water</option>
+          <option value="Grass">🌿 Grass</option>
+          <option value="Electric">⚡ Electric</option>
+          <option value="Psychic">🔮 Psychic</option>
+          <option value="Fighting">🥊 Fighting</option>
+          <option value="Dark">🌑 Dark</option>
+          <option value="Steel">⚙️ Steel</option>
+          <option value="Dragon">🐉 Dragon</option>
+          <option value="Fairy">✨ Fairy</option>
+          <option value="Normal">⭐ Normal</option>
+          <option value="Colorless">🌀 Colorless</option>
+        </select>
+        <select id="filter-set" onchange="applyFilter()" class="filter-select">
+          <option value="">All sets</option>
+        </select>
+        <select id="filter-movers" onchange="applyFilter()" class="filter-select">
+          <option value="">All cards</option>
+          <option value="gainers">↑ Top gainers</option>
+          <option value="losers">↓ Biggest drops</option>
+        </select>
+      </div>
+    </div>
+    <div class="controls-right">
+      <button class="btn-refresh" onclick="refreshPrices()">↻ Refresh prices</button>
+      <button class="btn-export" onclick="exportCSV()" title="Export to CSV">↓ Export</button>
+      <button class="btn-reset" onclick="resetVault()" title="Delete all cards">⚠ Reset</button>
+      <button class="btn-add" onclick="toggleForm()">+ Add card</button>
+    </div>
+  </div>
 
       <div class="form-card" id="add-form">
         <div class="form-title">Add new card</div>
