@@ -1,9 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pokémon Card Tracker</title>
+  <title>PokeVault — Card Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -14,7 +17,8 @@
   <!-- Card detail modal -->
   <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
     <div class="modal" id="card-modal">
-      <button class="modal-close" onclick="closeModal()">&#x2715;</button>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+      <div class="modal-type-bar" id="modal-type-bar"></div>
       <div class="modal-header">
         <div>
           <h2 id="modal-name"></h2>
@@ -48,16 +52,16 @@
         <p class="modal-chart-empty" id="modal-chart-empty">No price history yet — refresh prices to start tracking</p>
       </div>
       <div class="modal-actions">
-        <button class="btn-edit" id="modal-edit-btn" onclick="openEditForm()">Edit card</button>
+        <button class="btn-edit" onclick="openEditForm()">Edit card</button>
       </div>
     </div>
   </div>
 
-  <!-- Edit card modal -->
+  <!-- Edit modal -->
   <div class="modal-overlay" id="edit-overlay">
     <div class="modal">
-      <button class="modal-close" onclick="closeEditModal()">&#x2715;</button>
-      <h2 style="font-size:16px; font-weight:500; margin-bottom:20px;">Edit card</h2>
+      <button class="modal-close" onclick="closeEditModal()">✕</button>
+      <h2 style="font-size:16px; font-weight:600; margin-bottom:20px; letter-spacing:0.05em; text-transform:uppercase;">Edit card</h2>
       <input type="hidden" id="edit-id" />
       <div class="form-grid">
         <div class="form-group">
@@ -72,22 +76,22 @@
           <label>Type</label>
           <select id="edit-type">
             <option value="">Unknown</option>
-            <option value="Fire">Fire</option>
-            <option value="Water">Water</option>
-            <option value="Grass">Grass</option>
-            <option value="Electric">Electric</option>
-            <option value="Psychic">Psychic</option>
-            <option value="Fighting">Fighting</option>
-            <option value="Dark">Dark</option>
-            <option value="Steel">Steel</option>
-            <option value="Dragon">Dragon</option>
-            <option value="Fairy">Fairy</option>
-            <option value="Normal">Normal</option>
-            <option value="Colorless">Colorless</option>
+            <option value="Fire">🔥 Fire</option>
+            <option value="Water">💧 Water</option>
+            <option value="Grass">🌿 Grass</option>
+            <option value="Electric">⚡ Electric</option>
+            <option value="Psychic">🔮 Psychic</option>
+            <option value="Fighting">🥊 Fighting</option>
+            <option value="Dark">🌑 Dark</option>
+            <option value="Steel">⚙️ Steel</option>
+            <option value="Dragon">🐉 Dragon</option>
+            <option value="Fairy">✨ Fairy</option>
+            <option value="Normal">⭐ Normal</option>
+            <option value="Colorless">🌀 Colorless</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Grade / condition</label>
+          <label>Grade</label>
           <select id="edit-grade">
             <option value="raw">Raw</option>
             <option value="PSA 10">PSA 10</option>
@@ -126,146 +130,201 @@
     </div>
   </div>
 
-  <div class="topbar">
-    <div>
-      <h1>&#x1F4C8; Card tracker</h1>
-      <p class="subtitle">Track your Pokémon card collection and portfolio value in SGD</p>
-    </div>
-    <div class="user-info">
-      <span id="username-display"></span>
-      <label class="color-toggle">
-        <input type="checkbox" id="color-toggle" onchange="toggleColors()" checked />
-        <span>Type colours</span>
-      </label>
-      <button class="logout-btn" onclick="logout()">Log out</button>
-    </div>
-  </div>
-
-  <div class="summary-grid">
-    <div class="metric"><div class="metric-label">Total cards</div><div class="metric-value" id="s-count">0</div></div>
-    <div class="metric"><div class="metric-label">Total cost</div><div class="metric-value" id="s-cost">SGD $0.00</div></div>
-    <div class="metric"><div class="metric-label">Current value</div><div class="metric-value" id="s-value">SGD $0.00</div></div>
-    <div class="metric"><div class="metric-label">Total profit/loss</div><div class="metric-value" id="s-profit">+SGD $0.00</div></div>
-  </div>
-
-  <div id="movers-section" style="display:none; margin-bottom: 28px;">
-    <div class="movers-grid">
-      <div>
-        <p class="movers-label gainers-label">&#x1F4C8; Top gainers</p>
-        <div id="movers-gainers" class="movers-list"></div>
+  <!-- Header -->
+  <header class="site-header" id="site-header">
+    <div class="header-inner">
+      <div class="header-brand">
+        <div class="brand-logo">⬡</div>
+        <div>
+          <div class="brand-name">PokeVault</div>
+          <div class="brand-sub">Card Portfolio Tracker</div>
+        </div>
       </div>
-      <div>
-        <p class="movers-label losers-label">&#x1F4C9; Biggest drops</p>
-        <div id="movers-losers" class="movers-list"></div>
+      <div class="header-right">
+        <div class="header-portfolio">
+          <div class="header-portfolio-value" id="header-value">SGD $0.00</div>
+          <div class="header-portfolio-label">Portfolio value</div>
+        </div>
+        <div class="header-controls">
+          <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme">◐</button>
+          <label class="color-toggle-label">
+            <input type="checkbox" id="color-toggle" onchange="toggleColors()" checked />
+            <span class="color-toggle-track"><span class="color-toggle-thumb"></span></span>
+            <span class="color-toggle-text">Type colours</span>
+          </label>
+          <span class="header-username" id="username-display"></span>
+          <button class="logout-btn" onclick="logout()">Log out</button>
+        </div>
       </div>
     </div>
-  </div>
+  </header>
 
-  <div class="section-header">
-    <span class="section-title">My cards</span>
-    <div class="top-actions">
-      <select id="filter-type" onchange="applyFilter()">
-        <option value="">All types</option>
-        <option value="Fire">Fire</option>
-        <option value="Water">Water</option>
-        <option value="Grass">Grass</option>
-        <option value="Electric">Electric</option>
-        <option value="Psychic">Psychic</option>
-        <option value="Fighting">Fighting</option>
-        <option value="Dark">Dark</option>
-        <option value="Steel">Steel</option>
-        <option value="Dragon">Dragon</option>
-        <option value="Fairy">Fairy</option>
-        <option value="Normal">Normal</option>
-        <option value="Colorless">Colorless</option>
-      </select>
-      <select id="filter-movers" onchange="applyFilter()">
-        <option value="">All cards</option>
-        <option value="gainers">Top gainers</option>
-        <option value="losers">Biggest drops</option>
-      </select>
-      <button class="refresh-btn" onclick="refreshPrices()">&#x21BB; Refresh prices</button>
-      <button class="add-btn" onclick="toggleForm()">+ Add card</button>
-    </div>
-  </div>
+  <main class="main-content">
 
-  <div class="form-card" id="add-form">
-    <div class="form-grid">
-      <div class="form-group">
-        <label>Card name</label>
-        <input type="text" id="f-name" placeholder="e.g. Mew V" />
+    <!-- Summary grid -->
+    <div class="summary-grid">
+      <div class="metric-card">
+        <div class="metric-icon">📦</div>
+        <div class="metric-body">
+          <div class="metric-label">Total cards</div>
+          <div class="metric-value" id="s-count">0</div>
+        </div>
       </div>
-      <div class="form-group">
-        <label>Set</label>
-        <input type="text" id="f-set" placeholder="e.g. Fusion Strike" />
+      <div class="metric-card">
+        <div class="metric-icon">💸</div>
+        <div class="metric-body">
+          <div class="metric-label">Total invested</div>
+          <div class="metric-value" id="s-cost">$0.00</div>
+        </div>
       </div>
-      <div class="form-group">
-        <label>Type</label>
-        <select id="f-type">
-          <option value="">Unknown</option>
-          <option value="Fire">Fire</option>
-          <option value="Water">Water</option>
-          <option value="Grass">Grass</option>
-          <option value="Electric">Electric</option>
-          <option value="Psychic">Psychic</option>
-          <option value="Fighting">Fighting</option>
-          <option value="Dark">Dark</option>
-          <option value="Steel">Steel</option>
-          <option value="Dragon">Dragon</option>
-          <option value="Fairy">Fairy</option>
-          <option value="Normal">Normal</option>
-          <option value="Colorless">Colorless</option>
-        </select>
+      <div class="metric-card">
+        <div class="metric-icon">📈</div>
+        <div class="metric-body">
+          <div class="metric-label">Current value</div>
+          <div class="metric-value" id="s-value">$0.00</div>
+        </div>
       </div>
-      <div class="form-group">
-        <label>Grade / condition</label>
-        <select id="f-grade">
-          <option value="raw">Raw</option>
-          <option value="PSA 10">PSA 10</option>
-          <option value="PSA 9">PSA 9</option>
-          <option value="PSA 8">PSA 8</option>
-          <option value="PSA 7">PSA 7</option>
-          <option value="BGS 10">BGS 10</option>
-          <option value="BGS 9.5">BGS 9.5</option>
-          <option value="BGS 9">BGS 9</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Purchase price (SGD)</label>
-        <input type="number" id="f-price" placeholder="0.00" step="0.01" min="0" />
-      </div>
-      <div class="form-group full">
-        <label>PriceCharting URL</label>
-        <input type="text" id="f-url" placeholder="https://www.pricecharting.com/game/pokemon-.../card-123" />
+      <div class="metric-card profit-card">
+        <div class="metric-icon" id="profit-icon">💰</div>
+        <div class="metric-body">
+          <div class="metric-label">Total profit/loss</div>
+          <div class="metric-value" id="s-profit">$0.00</div>
+        </div>
       </div>
     </div>
-    <div class="form-actions">
-      <button class="btn-cancel" onclick="toggleForm()">Cancel</button>
-      <button class="btn-primary" onclick="addCard()">Add card</button>
+
+    <!-- Movers -->
+    <div id="movers-section" style="display:none;">
+      <div class="section-label">Market movers</div>
+      <div class="movers-grid">
+        <div class="movers-col">
+          <div class="movers-col-label gainers-label">↑ Top gainers</div>
+          <div id="movers-gainers" class="movers-list"></div>
+        </div>
+        <div class="movers-col">
+          <div class="movers-col-label losers-label">↓ Biggest drops</div>
+          <div id="movers-losers" class="movers-list"></div>
+        </div>
+      </div>
     </div>
-  </div>
 
-  <div class="table-wrap" id="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th onclick="sortBy('name')" class="sortable">Card name <span class="sort-arrow inactive">↕</span></th>
-          <th onclick="sortBy('set')" class="sortable">Set <span class="sort-arrow inactive">↕</span></th>
-          <th>Type</th>
-          <th>Grade</th>
-          <th onclick="sortBy('purchasePrice')" class="sortable">Purchase price <span class="sort-arrow inactive">↕</span></th>
-          <th onclick="sortBy('currentValue')" class="sortable">Current value <span class="sort-arrow inactive">↕</span></th>
-          <th onclick="sortBy('profit')" class="sortable">Profit / loss <span class="sort-arrow inactive">↕</span></th>
-          <th onclick="sortBy('lastUpdated')" class="sortable">Last updated <span class="sort-arrow inactive">↕</span></th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="card-table"></tbody>
-    </table>
-  </div>
+    <!-- Controls -->
+    <div class="controls-bar">
+      <div class="controls-left">
+        <div class="section-label">My collection</div>
+        <div class="filter-group">
+          <select id="filter-type" onchange="applyFilter()" class="filter-select">
+            <option value="">All types</option>
+            <option value="Fire">🔥 Fire</option>
+            <option value="Water">💧 Water</option>
+            <option value="Grass">🌿 Grass</option>
+            <option value="Electric">⚡ Electric</option>
+            <option value="Psychic">🔮 Psychic</option>
+            <option value="Fighting">🥊 Fighting</option>
+            <option value="Dark">🌑 Dark</option>
+            <option value="Steel">⚙️ Steel</option>
+            <option value="Dragon">🐉 Dragon</option>
+            <option value="Fairy">✨ Fairy</option>
+            <option value="Normal">⭐ Normal</option>
+            <option value="Colorless">🌀 Colorless</option>
+          </select>
+          <select id="filter-movers" onchange="applyFilter()" class="filter-select">
+            <option value="">All cards</option>
+            <option value="gainers">↑ Top gainers</option>
+            <option value="losers">↓ Biggest drops</option>
+          </select>
+        </div>
+      </div>
+      <div class="controls-right">
+        <button class="btn-refresh" onclick="refreshPrices()">↻ Refresh prices</button>
+        <button class="btn-add" onclick="toggleForm()">+ Add card</button>
+      </div>
+    </div>
 
-  <div class="card-list" id="card-list"></div>
-  <p class="last-updated" id="last-updated"></p>
+    <!-- Add form -->
+    <div class="form-card" id="add-form">
+      <div class="form-title">Add new card</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Card name</label>
+          <input type="text" id="f-name" placeholder="e.g. Mew V" />
+        </div>
+        <div class="form-group">
+          <label>Set</label>
+          <input type="text" id="f-set" placeholder="e.g. Fusion Strike" />
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <select id="f-type">
+            <option value="">Unknown</option>
+            <option value="Fire">🔥 Fire</option>
+            <option value="Water">💧 Water</option>
+            <option value="Grass">🌿 Grass</option>
+            <option value="Electric">⚡ Electric</option>
+            <option value="Psychic">🔮 Psychic</option>
+            <option value="Fighting">🥊 Fighting</option>
+            <option value="Dark">🌑 Dark</option>
+            <option value="Steel">⚙️ Steel</option>
+            <option value="Dragon">🐉 Dragon</option>
+            <option value="Fairy">✨ Fairy</option>
+            <option value="Normal">⭐ Normal</option>
+            <option value="Colorless">🌀 Colorless</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Grade</label>
+          <select id="f-grade">
+            <option value="raw">Raw</option>
+            <option value="PSA 10">PSA 10</option>
+            <option value="PSA 9">PSA 9</option>
+            <option value="PSA 8">PSA 8</option>
+            <option value="PSA 7">PSA 7</option>
+            <option value="BGS 10">BGS 10</option>
+            <option value="BGS 9.5">BGS 9.5</option>
+            <option value="BGS 9">BGS 9</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Purchase price (SGD)</label>
+          <input type="number" id="f-price" placeholder="0.00" step="0.01" min="0" />
+        </div>
+        <div class="form-group full">
+          <label>PriceCharting URL</label>
+          <input type="text" id="f-url" placeholder="https://www.pricecharting.com/game/pokemon-.../card-123" />
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-cancel" onclick="toggleForm()">Cancel</button>
+        <button class="btn-primary" onclick="addCard()">Add to vault</button>
+      </div>
+    </div>
+
+    <!-- Desktop table -->
+    <div class="table-wrap" id="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortBy('name')" class="sortable">Card <span class="sort-arr">↕</span></th>
+            <th onclick="sortBy('set')" class="sortable">Set <span class="sort-arr">↕</span></th>
+            <th>Type</th>
+            <th>Grade</th>
+            <th onclick="sortBy('purchasePrice')" class="sortable">Paid <span class="sort-arr">↕</span></th>
+            <th onclick="sortBy('currentValue')" class="sortable">Value <span class="sort-arr">↕</span></th>
+            <th onclick="sortBy('profit')" class="sortable">P/L <span class="sort-arr">↕</span></th>
+            <th onclick="sortBy('lastUpdated')" class="sortable">Updated <span class="sort-arr">↕</span></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="card-table"></tbody>
+      </table>
+    </div>
+
+    <!-- Mobile list -->
+    <div class="card-list" id="card-list"></div>
+
+    <p class="last-updated" id="last-updated"></p>
+
+  </main>
 
   <script src="script.js"></script>
 </body>
