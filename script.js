@@ -1,4 +1,4 @@
-let USD_TO_SGD = 1.35; // fallback, will be updated from live rate
+let USD_TO_SGD = 1.35;
 let cards = [];
 let priceChart = null;
 let colorEnabled = true;
@@ -207,13 +207,13 @@ async function deleteCard(id) {
   toast('Card removed.', 'info');
 }
 
-// ── Reset all cards ─────────────────────────────────────────────────
+// ── Reset vault ─────────────────────────────────────────────────────
 async function resetVault() {
   const confirmed = await confirmDialog('Delete ALL cards from your vault? This cannot be undone.');
   if (!confirmed) return;
-  const active = [...cards];
+  const snapshot = [...cards];
   let failed = 0;
-  for (const card of active) {
+  for (const card of snapshot) {
     const res = await fetch('/api/cards/' + card.id, { method: 'DELETE' });
     if (!res.ok) failed++;
   }
@@ -333,7 +333,7 @@ async function saveManualPrice() {
   const now = Date.now();
   const idx = cards.findIndex(c => c.id === id);
   if (idx < 0) return;
-  const history = cards[idx].priceHistory || [];
+  const history = [...(cards[idx].priceHistory || [])];
   const lastEntry = history[history.length - 1];
   if (!lastEntry || !isSameDay(lastEntry.date, now)) {
     history.push({ date: now, value: val });
@@ -369,7 +369,10 @@ function applySearch() {
 
 function getFilteredCards() {
   let filtered = cards.filter(c => !c.sold);
-  if (searchQuery) filtered = filtered.filter(c => c.name.toLowerCase().includes(searchQuery) || (c.set || '').toLowerCase().includes(searchQuery));
+  if (searchQuery) filtered = filtered.filter(c =>
+    c.name.toLowerCase().includes(searchQuery) ||
+    (c.set || '').toLowerCase().includes(searchQuery)
+  );
   if (activeTypeFilter) filtered = filtered.filter(c => c.type === activeTypeFilter);
   if (activeSetFilter) filtered = filtered.filter(c => c.set === activeSetFilter);
   if (activeMoversFilter) {
@@ -395,7 +398,9 @@ function exportCSV() {
   const headers = ['Name','Set','Type','Grade','Quantity','Purchase Price (SGD)','Current Value (SGD)','P/L (SGD)','Purchase Date','Target Price','Notes','Status','Sold Price','Sold Date','Sold To'];
   const rows = all.map(c => {
     const cost = Number(c.purchasePrice) * (c.quantity || 1);
-    const val = c.sold ? Number(c.soldPrice || 0) * (c.quantity || 1) : (c.currentValue != null ? Number(c.currentValue) * (c.quantity || 1) : '');
+    const val = c.sold
+      ? Number(c.soldPrice || 0) * (c.quantity || 1)
+      : (c.currentValue != null ? Number(c.currentValue) * (c.quantity || 1) : '');
     const pl = c.sold
       ? ((Number(c.soldPrice || 0) - Number(c.purchasePrice)) * (c.quantity || 1)).toFixed(2)
       : (c.currentValue != null ? ((Number(c.currentValue) - Number(c.purchasePrice)) * (c.quantity || 1)).toFixed(2) : '');
@@ -404,7 +409,9 @@ function exportCSV() {
       cost.toFixed(2), val !== '' ? Number(val).toFixed(2) : '',
       pl, c.purchaseDate || '', c.targetPrice || '', c.notes || '',
       c.sold ? 'Sold' : 'Active',
-      c.sold ? (c.soldPrice || '') : '', c.sold ? (c.soldDate || '') : '', c.sold ? (c.soldTo || '') : ''
+      c.sold ? (c.soldPrice || '') : '',
+      c.sold ? (c.soldDate || '') : '',
+      c.sold ? (c.soldTo || '') : ''
     ].map(v => '"' + String(v).replace(/"/g, '""') + '"');
   });
 
@@ -413,10 +420,10 @@ function exportCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'pokevault-collection-' + new Date().toISOString().split('T')[0] + '.csv';
+  a.download = 'pokevault-' + new Date().toISOString().split('T')[0] + '.csv';
   a.click();
   URL.revokeObjectURL(url);
-  toast('Collection exported as CSV.', 'success');
+  toast('Collection exported.', 'success');
 }
 
 // ── Card detail modal ────────────────────────────────────────────────
@@ -752,40 +759,50 @@ function updateSummary() {
   if (profitIcon) profitIcon.textContent = profit >= 0 ? '💰' : '📉';
 }
 
-// ── Price fetching (no URL required) ────────────────────────────────
-// Searches Pokemon TCG API directly by card name + set name
-// Falls back gracefully, supports alternate art / special sets
-
+// ── Price fetching ───────────────────────────────────────────────────
 async function fetchPrice(card) {
   try {
-    // Build search query from name + optional set
-    const namePart = card.name.replace(/['"]/g, '');
-    let query = `name:"${namePart}"`;
+    const namePart = card.name.replace(/['"]/g, '').trim();
+
+    // Stage 1: exact name + exact set
     if (card.set) {
-      // Try to match set name loosely
-      const setSanitized = card.set.replace(/['"]/g, '');
-      query += ` set.name:"${setSanitized}"`;
-    }
-
-    const apiUrl = 'https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(query) + '&select=name,set,number,tcgplayer&orderBy=-set.releaseDate&pageSize=20';
-    const res = await fetch(apiUrl);
-    if (!res.ok) return null;
-    const data = await res.json();
-
-    if (!data.data || data.data.length === 0) {
-      // Retry without set name if no results
-      if (card.set) {
-        const fallbackUrl = 'https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(`name:"${namePart}"`) + '&select=name,set,number,tcgplayer&orderBy=-set.releaseDate&pageSize=10';
-        const res2 = await fetch(fallbackUrl);
-        if (!res2.ok) return null;
-        const data2 = await res2.json();
-        if (!data2.data || data2.data.length === 0) return null;
-        return extractPriceFromResults(data2.data, card);
+      const setSanitized = card.set.replace(/['"]/g, '').trim();
+      const q1 = `name:"${namePart}" set.name:"${setSanitized}"`;
+      const url1 = 'https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(q1) + '&select=name,set,number,tcgplayer&orderBy=-set.releaseDate&pageSize=20';
+      const res1 = await fetch(url1);
+      if (res1.ok) {
+        const data1 = await res1.json();
+        if (data1.data && data1.data.length > 0) {
+          const price = extractPriceFromResults(data1.data, card);
+          if (price != null) return price;
+        }
       }
-      return null;
+
+      // Stage 2: exact name + wildcard set (first word)
+      const setFirstWord = setSanitized.split(' ')[0];
+      if (setFirstWord.length > 2) {
+        const q2 = `name:"${namePart}" set.name:${setFirstWord}*`;
+        const url2 = 'https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(q2) + '&select=name,set,number,tcgplayer&orderBy=-set.releaseDate&pageSize=20';
+        const res2 = await fetch(url2);
+        if (res2.ok) {
+          const data2 = await res2.json();
+          if (data2.data && data2.data.length > 0) {
+            const price = extractPriceFromResults(data2.data, card);
+            if (price != null) return price;
+          }
+        }
+      }
     }
 
-    return extractPriceFromResults(data.data, card);
+    // Stage 3: name only, pick best priced result
+    const q3 = `name:"${namePart}"`;
+    const url3 = 'https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(q3) + '&select=name,set,number,tcgplayer&orderBy=-set.releaseDate&pageSize=20';
+    const res3 = await fetch(url3);
+    if (!res3.ok) return null;
+    const data3 = await res3.json();
+    if (!data3.data || data3.data.length === 0) return null;
+    return extractPriceFromResults(data3.data, card);
+
   } catch (e) {
     console.error('fetchPrice error for ' + card.name, e);
     return null;
@@ -793,23 +810,37 @@ async function fetchPrice(card) {
 }
 
 function extractPriceFromResults(results, card) {
-  // Find best match: prefer exact name match, then pick first with a price
-  const exactMatches = results.filter(r => r.name.toLowerCase() === card.name.toLowerCase());
-  const candidates = exactMatches.length > 0 ? exactMatches : results;
+  const cardSetLower = (card.set || '').toLowerCase();
 
-  for (const match of candidates) {
+  // Score each result by name + set similarity
+  const scored = results.map(r => {
+    let score = 0;
+    if (r.name.toLowerCase() === card.name.toLowerCase()) score += 10;
+    if (cardSetLower && r.set && r.set.name) {
+      const rSetLower = r.set.name.toLowerCase();
+      if (rSetLower === cardSetLower) score += 5;
+      else if (rSetLower.includes(cardSetLower) || cardSetLower.includes(rSetLower)) score += 3;
+      const firstWord = cardSetLower.split(' ')[0];
+      if (firstWord.length > 3 && rSetLower.includes(firstWord)) score += 1;
+    }
+    return { ...r, _score: score };
+  }).sort((a, b) => b._score - a._score);
+
+  for (const match of scored) {
     const prices = match.tcgplayer ? match.tcgplayer.prices : null;
     if (!prices) continue;
 
-    // Try various price types in order of preference
-    const base =
-      (prices.holofoil?.market) ? prices.holofoil.market :
-      (prices['1stEditionHolofoil']?.market) ? prices['1stEditionHolofoil'].market :
-      (prices.normal?.market) ? prices.normal.market :
-      (prices.reverseHolofoil?.market) ? prices.reverseHolofoil.market :
-      (prices.unlimited?.market) ? prices.unlimited.market :
-      (prices['1stEdition']?.market) ? prices['1stEdition'].market : null;
-
+    // Check preferred keys first, then fall through to any key
+    const preferredKeys = ['holofoil','1stEditionHolofoil','normal','reverseHolofoil','unlimited','1stEdition'];
+    let base = null;
+    for (const key of preferredKeys) {
+      if (prices[key]?.market) { base = prices[key].market; break; }
+    }
+    if (!base) {
+      for (const key of Object.keys(prices)) {
+        if (prices[key]?.market) { base = prices[key].market; break; }
+      }
+    }
     if (!base) continue;
 
     const gradeStr = (card.grade || 'raw').toLowerCase();
