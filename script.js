@@ -7,29 +7,39 @@ let activeMoversFilter = '';
 let editingCardId = null;
 
 const TYPE_COLORS = {
-  'Fire':      { bg: '#FFE0CC', border: '#FF8C42', chart: '#FF8C42' },
-  'Water':     { bg: '#CCE8FF', border: '#4A90D9', chart: '#4A90D9' },
-  'Grass':     { bg: '#D4F0C0', border: '#5DAA46', chart: '#5DAA46' },
-  'Electric':  { bg: '#FFF5CC', border: '#F0C030', chart: '#F0C030' },
-  'Psychic':   { bg: '#FFD6E8', border: '#E06090', chart: '#E06090' },
-  'Fighting':  { bg: '#FFD6C0', border: '#C0602E', chart: '#C0602E' },
-  'Dark':      { bg: '#D6D0E8', border: '#5A4E8C', chart: '#5A4E8C' },
-  'Steel':     { bg: '#E0E8F0', border: '#8090A8', chart: '#8090A8' },
-  'Dragon':    { bg: '#CCE0FF', border: '#3060C8', chart: '#3060C8' },
-  'Fairy':     { bg: '#FFE0F0', border: '#E87EB8', chart: '#E87EB8' },
-  'Normal':    { bg: '#F0EEE8', border: '#A8A878', chart: '#A8A878' },
-  'Colorless': { bg: '#F5F5F5', border: '#B8B8B8', chart: '#B8B8B8' },
+  'Fire':      { bg: 'rgba(255,100,50,0.12)', border: '#ff6432', chart: '#ff6432' },
+  'Water':     { bg: 'rgba(74,144,217,0.12)', border: '#4a90d9', chart: '#4a90d9' },
+  'Grass':     { bg: 'rgba(76,175,80,0.12)',  border: '#4caf50', chart: '#4caf50' },
+  'Electric':  { bg: 'rgba(255,200,0,0.12)',  border: '#ffc800', chart: '#ffc800' },
+  'Psychic':   { bg: 'rgba(220,80,160,0.12)', border: '#dc50a0', chart: '#dc50a0' },
+  'Fighting':  { bg: 'rgba(192,80,40,0.12)',  border: '#c05028', chart: '#c05028' },
+  'Dark':      { bg: 'rgba(80,60,120,0.12)',  border: '#503c78', chart: '#8060c0' },
+  'Steel':     { bg: 'rgba(120,140,160,0.12)',border: '#788ca0', chart: '#788ca0' },
+  'Dragon':    { bg: 'rgba(40,100,220,0.12)', border: '#2864dc', chart: '#2864dc' },
+  'Fairy':     { bg: 'rgba(240,100,180,0.12)',border: '#f064b4', chart: '#f064b4' },
+  'Normal':    { bg: 'rgba(160,160,120,0.12)',border: '#a0a078', chart: '#a0a078' },
+  'Colorless': { bg: 'rgba(180,180,180,0.08)',border: '#b4b4b4', chart: '#b4b4b4' },
 };
 
 function getTypeColor(type) {
-  if (!colorEnabled) return { bg: 'white', border: '#e0dfd8', chart: '#1a1a1a' };
-  return TYPE_COLORS[type] || { bg: '#f0efea', border: '#ccc', chart: '#1a1a1a' };
+  if (!colorEnabled) return { bg: 'transparent', border: 'var(--border)', chart: '#c9a84c' };
+  return TYPE_COLORS[type] || { bg: 'transparent', border: 'var(--border)', chart: '#c9a84c' };
 }
 
 function toggleColors() {
   colorEnabled = document.getElementById('color-toggle').checked;
   render();
 }
+
+function toggleTheme() {
+  const html = document.documentElement;
+  html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+}
+
+window.addEventListener('scroll', () => {
+  const header = document.getElementById('site-header');
+  if (header) header.classList.toggle('scrolled', window.scrollY > 20);
+});
 
 async function init() {
   const res = await fetch('/api/me');
@@ -60,6 +70,21 @@ async function checkAutoRefresh() {
     toast('Auto-refreshing prices...', 'info');
     await refreshPrices(true);
   }
+}
+
+function animateValue(el, target, prefix) {
+  const start = parseFloat(el.getAttribute('data-val') || '0');
+  const duration = 600;
+  const startTime = performance.now();
+  function step(now) {
+    const p = Math.min((now - startTime) / duration, 1);
+    const ease = 1 - Math.pow(1 - p, 3);
+    const current = start + (target - start) * ease;
+    el.textContent = prefix + '$' + current.toFixed(2);
+    if (p < 1) requestAnimationFrame(step);
+    else { el.textContent = prefix + '$' + target.toFixed(2); el.setAttribute('data-val', target); }
+  }
+  requestAnimationFrame(step);
 }
 
 function toast(message, type) {
@@ -112,12 +137,12 @@ async function addCard() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, set, type, grade, purchasePrice: price, currentValue: null, lastUpdated: null, url, priceHistory: [] })
   });
-  if (!res.ok) { toast('Failed to save card. Please try again.', 'error'); return; }
+  if (!res.ok) { toast('Failed to save card.', 'error'); return; }
   const card = await res.json();
   cards.push(card);
   render();
   toggleForm();
-  toast(name + ' added to your collection.', 'success');
+  toast(name + ' added to your vault.', 'success');
   document.getElementById('f-name').value = '';
   document.getElementById('f-set').value = '';
   document.getElementById('f-type').value = '';
@@ -128,7 +153,7 @@ async function addCard() {
 
 async function deleteCard(id) {
   const card = cards.find(c => c.id === id);
-  const confirmed = await confirmDialog('Remove "' + (card ? card.name : 'this card') + '" from your collection?');
+  const confirmed = await confirmDialog('Remove "' + (card ? card.name : 'this card') + '" from your vault?');
   if (!confirmed) return;
   const res = await fetch('/api/cards/' + id, { method: 'DELETE' });
   if (!res.ok) { toast('Failed to delete card.', 'error'); return; }
@@ -208,6 +233,10 @@ function openCard(id) {
   const val = card.currentValue != null ? Number(card.currentValue) : null;
   const profit = val != null ? val - cost : null;
   const colors = getTypeColor(card.type);
+
+  const typeBar = document.getElementById('modal-type-bar');
+  if (typeBar) typeBar.style.background = colors.border;
+
   document.getElementById('modal-name').textContent = card.name;
   document.getElementById('modal-meta').textContent = (card.set || 'Unknown set') + (card.type ? ' · ' + card.type : '');
   const gradeEl = document.getElementById('modal-grade');
@@ -225,6 +254,7 @@ function openCard(id) {
   }
   document.getElementById('modal-updated').textContent = card.lastUpdated
     ? new Date(card.lastUpdated).toLocaleDateString('en-SG') : '—';
+
   const history = card.priceHistory || [];
   const emptyEl = document.getElementById('modal-chart-empty');
   const chartContainer = document.querySelector('.modal-chart-container');
@@ -248,9 +278,11 @@ function openCard(id) {
           borderColor: colors.chart,
           backgroundColor: colors.bg,
           borderWidth: 2,
-          pointRadius: 3,
+          pointRadius: 4,
           pointBackgroundColor: colors.chart,
-          tension: 0.3,
+          pointBorderColor: 'var(--bg2)',
+          pointBorderWidth: 2,
+          tension: 0.4,
           fill: true
         }]
       },
@@ -259,11 +291,26 @@ function openCard(id) {
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: ctx => 'SGD $' + Number(ctx.raw).toFixed(2) } }
+          tooltip: {
+            backgroundColor: 'var(--bg3)',
+            borderColor: 'var(--border2)',
+            borderWidth: 1,
+            titleColor: 'var(--text2)',
+            bodyColor: 'var(--text)',
+            callbacks: { label: ctx => 'SGD $' + Number(ctx.raw).toFixed(2) }
+          }
         },
         scales: {
-          y: { ticks: { callback: v => 'SGD $' + v, font: { size: 11 } }, grid: { color: '#f0efea' } },
-          x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+          y: {
+            ticks: { callback: v => '$' + v, font: { size: 11, family: 'DM Mono' }, color: 'var(--text3)' },
+            grid: { color: 'var(--border)' },
+            border: { display: false }
+          },
+          x: {
+            ticks: { font: { size: 11, family: 'DM Mono' }, color: 'var(--text3)' },
+            grid: { display: false },
+            border: { display: false }
+          }
         }
       }
     });
@@ -282,6 +329,7 @@ document.addEventListener('keydown', e => {
     document.getElementById('modal-overlay').classList.remove('active');
     document.getElementById('confirm-overlay').classList.remove('active');
     document.getElementById('edit-overlay').classList.remove('active');
+    if (priceChart) { priceChart.destroy(); priceChart = null; }
   }
 });
 
@@ -330,8 +378,8 @@ function renderMovers() {
     const pct = (profit / Number(c.purchasePrice)) * 100;
     const pos = profit >= 0;
     const colors = getTypeColor(c.type);
-    return '<div class="mover-card" style="border-left: 3px solid ' + colors.border + '; background: ' + colors.bg + ';" onclick="openCard(\'' + c.id + '\')">' +
-      '<div><div class="mover-name">' + esc(c.name) + '</div><div class="mover-set">' + esc(c.set || '—') + '</div></div>' +
+    return '<div class="mover-card" style="border-left: 3px solid ' + colors.border + ';" onclick="openCard(\'' + c.id + '\')">' +
+      '<div style="overflow:hidden;"><div class="mover-name">' + esc(c.name) + '</div><div class="mover-set">' + esc(c.set || '—') + '</div></div>' +
       '<div class="mover-value ' + (pos ? 'profit-pos' : 'profit-neg') + '">' +
         (pos ? '↑' : '↓') + ' ' + Math.abs(pct).toFixed(1) + '%' +
         '<span class="mover-sgd">' + (pos ? '+' : '-') + 'SGD $' + Math.abs(profit).toFixed(2) + '</span>' +
@@ -348,8 +396,8 @@ function render() {
   const sorted = getSortedCards(filtered);
 
   if (cards.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">No cards yet — click "+ Add card" to get started</div></td></tr>';
-    cardList.innerHTML = '<div class="empty-state">No cards yet — click "+ Add card" to get started</div>';
+    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">Your vault is empty — add your first card to get started</div></td></tr>';
+    cardList.innerHTML = '<div class="empty-state">Your vault is empty — add your first card to get started</div>';
     updateSummary();
     renderMovers();
     return;
@@ -368,15 +416,15 @@ function render() {
       ? '<span class="type-badge" style="background:' + colors.bg + '; color:' + colors.border + '; border: 1px solid ' + colors.border + ';">' + esc(c.type) + '</span>'
       : '<span class="type-badge type-unknown">—</span>';
     return '<tr class="card-row" onclick="openCard(\'' + c.id + '\')" style="border-left: 3px solid ' + colors.border + '">' +
-      '<td title="' + esc(c.name) + '">' + esc(c.name) + '</td>' +
-      '<td title="' + esc(c.set || '—') + '">' + esc(c.set || '—') + '</td>' +
+      '<td title="' + esc(c.name) + '" style="font-weight:600;">' + esc(c.name) + '</td>' +
+      '<td title="' + esc(c.set || '—') + '" style="color:var(--text2);">' + esc(c.set || '—') + '</td>' +
       '<td>' + typeBadge + '</td>' +
       '<td><span class="badge ' + gradeClass + '">' + esc(c.grade) + '</span></td>' +
-      '<td>SGD $' + cost.toFixed(2) + '</td>' +
-      '<td>' + fmt(val) + '</td>' +
-      '<td class="' + profitClass + '">' + profitStr + '</td>' +
-      '<td>' + updated + '</td>' +
-      '<td><button class="del-btn" onclick="event.stopPropagation(); deleteCard(\'' + c.id + '\')" title="Delete">&#x2715;</button></td>' +
+      '<td style="font-family:var(--font-mono);">$' + cost.toFixed(2) + '</td>' +
+      '<td style="font-family:var(--font-mono);">' + (val != null ? '$' + val.toFixed(2) : '—') + '</td>' +
+      '<td class="' + profitClass + '" style="font-family:var(--font-mono); font-weight:600;">' + profitStr + '</td>' +
+      '<td style="color:var(--text3); font-family:var(--font-mono); font-size:12px;">' + updated + '</td>' +
+      '<td><button class="del-btn" onclick="event.stopPropagation(); deleteCard(\'' + c.id + '\')" title="Delete">✕</button></td>' +
     '</tr>';
   }).join('');
 
@@ -388,11 +436,11 @@ function render() {
     const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
     const gradeClass = c.grade === 'raw' ? 'badge-raw' : 'badge-psa';
     const colors = getTypeColor(c.type);
-    return '<div class="mobile-card" style="border-left: 3px solid ' + colors.border + '; background: linear-gradient(to right, ' + colors.bg + ', white);" onclick="openCard(\'' + c.id + '\')">' +
+    return '<div class="mobile-card" style="border-left: 3px solid ' + colors.border + ';" onclick="openCard(\'' + c.id + '\')">' +
       '<div class="mobile-card-top">' +
         '<div><div class="mobile-card-name">' + esc(c.name) + '</div>' +
         '<div class="mobile-card-set">' + esc(c.set || '—') + ' · <span class="badge ' + gradeClass + '">' + esc(c.grade) + '</span></div></div>' +
-        '<button class="mobile-card-delete" onclick="event.stopPropagation(); deleteCard(\'' + c.id + '\')" title="Delete">&#x2715;</button>' +
+        '<button class="mobile-card-delete" onclick="event.stopPropagation(); deleteCard(\'' + c.id + '\')" title="Delete">✕</button>' +
       '</div>' +
       '<div class="mobile-card-bottom">' +
         '<div class="mobile-card-price">Paid: SGD $' + cost.toFixed(2) + '<br>Value: ' + fmt(val) + '</div>' +
@@ -413,12 +461,29 @@ function updateSummary() {
   const cost = cards.reduce((s, c) => s + Number(c.purchasePrice), 0);
   const value = cards.reduce((s, c) => s + (c.currentValue != null ? Number(c.currentValue) : Number(c.purchasePrice)), 0);
   const profit = value - cost;
+
   document.getElementById('s-count').textContent = count;
-  document.getElementById('s-cost').textContent = 'SGD $' + cost.toFixed(2);
-  document.getElementById('s-value').textContent = 'SGD $' + value.toFixed(2);
-  const pel = document.getElementById('s-profit');
-  pel.textContent = (profit >= 0 ? '↑ +' : '↓ -') + 'SGD $' + Math.abs(profit).toFixed(2);
-  pel.className = 'metric-value ' + (profit >= 0 ? 'pos' : 'neg');
+
+  const costEl = document.getElementById('s-cost');
+  const valueEl = document.getElementById('s-value');
+  const profitEl = document.getElementById('s-profit');
+  const headerVal = document.getElementById('header-value');
+
+  animateValue(costEl, cost, 'SGD ');
+  animateValue(valueEl, value, 'SGD ');
+  if (headerVal) animateValue(headerVal, value, 'SGD ');
+
+  const profitPrefix = profit >= 0 ? '↑ +SGD ' : '↓ -SGD ';
+  profitEl.textContent = profitPrefix + '$' + Math.abs(profit).toFixed(2);
+  profitEl.className = 'metric-value ' + (profit >= 0 ? 'pos' : 'neg');
+
+  const profitCard = document.querySelector('.profit-card');
+  const profitIcon = document.getElementById('profit-icon');
+  if (profitCard) {
+    profitCard.classList.toggle('pos', profit >= 0);
+    profitCard.classList.toggle('neg', profit < 0);
+  }
+  if (profitIcon) profitIcon.textContent = profit >= 0 ? '💰' : '📉';
 }
 
 async function fetchPrice(card) {
@@ -453,14 +518,12 @@ async function fetchPrice(card) {
 function isSameDay(ts1, ts2) {
   const d1 = new Date(ts1);
   const d2 = new Date(ts2);
-  return d1.getFullYear() === d2.getFullYear() &&
-    d1.getMonth() === d2.getMonth() &&
-    d1.getDate() === d2.getDate();
+  return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 }
 
 async function refreshPrices(silent) {
   if (cards.length === 0) { if (!silent) toast('No cards to refresh.', 'info'); return; }
-  const btn = document.querySelector('.refresh-btn');
+  const btn = document.querySelector('.btn-refresh');
   btn.disabled = true;
   btn.textContent = '↻ Fetching...';
   let updated = 0;
@@ -497,7 +560,7 @@ async function refreshPrices(silent) {
   btn.disabled = false;
   btn.textContent = '↻ Refresh prices';
   if (!silent) {
-    if (updated > 0) toast('Updated prices for ' + updated + ' card' + (updated > 1 ? 's' : '') + '.', 'success');
+    if (updated > 0) toast('Updated ' + updated + ' card' + (updated > 1 ? 's' : '') + '.', 'success');
     else toast('No prices could be fetched. Check your PriceCharting URLs.', 'error');
   }
 }
