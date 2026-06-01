@@ -818,3 +818,145 @@ tr:last-child td { border-bottom: none; }
   .brand-sub { display: none; }
   .summary-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
 }
+/* Nav */
+.header-nav {
+  display: flex;
+  gap: 4px;
+  background: var(--bg3);
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.nav-link {
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text2);
+  text-decoration: none;
+  transition: all 0.2s;
+  font-family: var(--font-mono);
+}
+
+.nav-link:hover { color: var(--text); }
+.nav-link.active { background: var(--bg2); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+
+/* Collection tabs */
+.collection-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg3);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 20px;
+  width: fit-content;
+}
+
+.col-tab {
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text2);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  transition: all 0.2s;
+}
+
+.col-tab:hover { color: var(--text); }
+.col-tab.active { background: var(--bg2); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+
+/* Target hit */
+.target-hit td { background: rgba(76,175,125,0.04) !important; }
+
+/* Sell button */
+.btn-sell {
+  font-size: 12px;
+  padding: 8px 20px;
+  border: 1px solid rgba(76,175,125,0.4);
+  border-radius: 8px;
+  background: rgba(76,175,125,0.08);
+  cursor: pointer;
+  color: var(--green);
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  transition: all 0.2s;
+  margin-right: 8px;
+}
+
+.btn-sell:hover { background: rgba(76,175,125,0.2); }
+
+/* Sold summary */
+.sold-summary {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text2);
+}
+
+/* Stats page */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.stats-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+
+.stats-card-wide { grid-column: 1 / -1; }
+.stats-card-title { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 20px; font-family: var(--font-mono); }
+
+/* Performers */
+.performers-list { display: flex; flex-direction: column; gap: 10px; }
+
+.performer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.performer-row:last-child { border-bottom: none; }
+.performer-name { font-size: 13px; font-weight: 600; }
+.performer-set { font-size: 11px; color: var(--text3); font-family: var(--font-mono); margin-left: 8px; font-weight: 400; }
+.performer-roi { font-size: 14px; font-weight: 700; font-family: var(--font-mono); white-space: nowrap; }
+
+/* Sold breakdown */
+.sold-breakdown-list { display: flex; flex-direction: column; gap: 12px; }
+
+.sold-breakdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.sold-breakdown-row:last-child { border-bottom: none; }
+
+/* Summary grid 5 cols */
+@media (min-width: 900px) {
+  .summary-grid { grid-template-columns: repeat(5, 1fr); }
+}
+
+@media (max-width: 700px) {
+  .stats-grid { grid-template-columns: 1fr; }
+  .stats-card-wide { grid-column: 1; }
+  .header-nav { display: none; }
+  .collection-tabs { width: 100%; }
+  .col-tab { flex: 1; text-align: center; }
+}
