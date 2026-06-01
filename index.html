@@ -11,6 +11,7 @@
 
   <div id="toast-container"></div>
 
+  <!-- Card detail modal -->
   <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
     <div class="modal" id="card-modal">
       <button class="modal-close" onclick="closeModal()">&#x2715;</button>
@@ -46,9 +47,75 @@
         </div>
         <p class="modal-chart-empty" id="modal-chart-empty">No price history yet — refresh prices to start tracking</p>
       </div>
+      <div class="modal-actions">
+        <button class="btn-edit" id="modal-edit-btn" onclick="openEditForm()">Edit card</button>
+      </div>
     </div>
   </div>
 
+  <!-- Edit card modal -->
+  <div class="modal-overlay" id="edit-overlay">
+    <div class="modal">
+      <button class="modal-close" onclick="closeEditModal()">&#x2715;</button>
+      <h2 style="font-size:16px; font-weight:500; margin-bottom:20px;">Edit card</h2>
+      <input type="hidden" id="edit-id" />
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Card name</label>
+          <input type="text" id="edit-name" />
+        </div>
+        <div class="form-group">
+          <label>Set</label>
+          <input type="text" id="edit-set" />
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <select id="edit-type">
+            <option value="">Unknown</option>
+            <option value="Fire">Fire</option>
+            <option value="Water">Water</option>
+            <option value="Grass">Grass</option>
+            <option value="Electric">Electric</option>
+            <option value="Psychic">Psychic</option>
+            <option value="Fighting">Fighting</option>
+            <option value="Dark">Dark</option>
+            <option value="Steel">Steel</option>
+            <option value="Dragon">Dragon</option>
+            <option value="Fairy">Fairy</option>
+            <option value="Normal">Normal</option>
+            <option value="Colorless">Colorless</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Grade / condition</label>
+          <select id="edit-grade">
+            <option value="raw">Raw</option>
+            <option value="PSA 10">PSA 10</option>
+            <option value="PSA 9">PSA 9</option>
+            <option value="PSA 8">PSA 8</option>
+            <option value="PSA 7">PSA 7</option>
+            <option value="BGS 10">BGS 10</option>
+            <option value="BGS 9.5">BGS 9.5</option>
+            <option value="BGS 9">BGS 9</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Purchase price (SGD)</label>
+          <input type="number" id="edit-price" step="0.01" min="0" />
+        </div>
+        <div class="form-group full">
+          <label>PriceCharting URL</label>
+          <input type="text" id="edit-url" />
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-cancel" onclick="closeEditModal()">Cancel</button>
+        <button class="btn-primary" onclick="saveEdit()">Save changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm dialog -->
   <div class="modal-overlay" id="confirm-overlay">
     <div class="modal confirm-modal">
       <p class="confirm-message" id="confirm-message"></p>
@@ -66,6 +133,10 @@
     </div>
     <div class="user-info">
       <span id="username-display"></span>
+      <label class="color-toggle">
+        <input type="checkbox" id="color-toggle" onchange="toggleColors()" checked />
+        <span>Type colours</span>
+      </label>
       <button class="logout-btn" onclick="logout()">Log out</button>
     </div>
   </div>
@@ -93,28 +164,26 @@
   <div class="section-header">
     <span class="section-title">My cards</span>
     <div class="top-actions">
-      <div class="filter-wrap">
-        <select id="filter-type" onchange="applyFilter()">
-          <option value="">All types</option>
-          <option value="Fire">Fire</option>
-          <option value="Water">Water</option>
-          <option value="Grass">Grass</option>
-          <option value="Electric">Electric</option>
-          <option value="Psychic">Psychic</option>
-          <option value="Fighting">Fighting</option>
-          <option value="Dark">Dark</option>
-          <option value="Steel">Steel</option>
-          <option value="Dragon">Dragon</option>
-          <option value="Fairy">Fairy</option>
-          <option value="Normal">Normal</option>
-          <option value="Colorless">Colorless</option>
-        </select>
-        <select id="filter-movers" onchange="applyFilter()">
-          <option value="">All cards</option>
-          <option value="gainers">Top gainers</option>
-          <option value="losers">Biggest drops</option>
-        </select>
-      </div>
+      <select id="filter-type" onchange="applyFilter()">
+        <option value="">All types</option>
+        <option value="Fire">Fire</option>
+        <option value="Water">Water</option>
+        <option value="Grass">Grass</option>
+        <option value="Electric">Electric</option>
+        <option value="Psychic">Psychic</option>
+        <option value="Fighting">Fighting</option>
+        <option value="Dark">Dark</option>
+        <option value="Steel">Steel</option>
+        <option value="Dragon">Dragon</option>
+        <option value="Fairy">Fairy</option>
+        <option value="Normal">Normal</option>
+        <option value="Colorless">Colorless</option>
+      </select>
+      <select id="filter-movers" onchange="applyFilter()">
+        <option value="">All cards</option>
+        <option value="gainers">Top gainers</option>
+        <option value="losers">Biggest drops</option>
+      </select>
       <button class="refresh-btn" onclick="refreshPrices()">&#x21BB; Refresh prices</button>
       <button class="add-btn" onclick="toggleForm()">+ Add card</button>
     </div>
@@ -165,7 +234,7 @@
         <label>Purchase price (SGD)</label>
         <input type="number" id="f-price" placeholder="0.00" step="0.01" min="0" />
       </div>
-      <div class="form-group">
+      <div class="form-group full">
         <label>PriceCharting URL</label>
         <input type="text" id="f-url" placeholder="https://www.pricecharting.com/game/pokemon-.../card-123" />
       </div>
