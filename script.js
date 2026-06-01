@@ -1,8 +1,10 @@
 const USD_TO_SGD = 1.35;
 let cards = [];
 let priceChart = null;
+let colorEnabled = true;
 let activeTypeFilter = '';
 let activeMoversFilter = '';
+let editingCardId = null;
 
 const TYPE_COLORS = {
   'Fire':      { bg: '#FFE0CC', border: '#FF8C42', chart: '#FF8C42' },
@@ -20,7 +22,13 @@ const TYPE_COLORS = {
 };
 
 function getTypeColor(type) {
+  if (!colorEnabled) return { bg: 'white', border: '#e0dfd8', chart: '#1a1a1a' };
   return TYPE_COLORS[type] || { bg: '#f0efea', border: '#ccc', chart: '#1a1a1a' };
+}
+
+function toggleColors() {
+  colorEnabled = document.getElementById('color-toggle').checked;
+  render();
 }
 
 async function init() {
@@ -129,6 +137,47 @@ async function deleteCard(id) {
   toast('Card removed.', 'info');
 }
 
+function openEditForm() {
+  const card = cards.find(c => c.id === editingCardId);
+  if (!card) return;
+  document.getElementById('edit-id').value = card.id;
+  document.getElementById('edit-name').value = card.name || '';
+  document.getElementById('edit-set').value = card.set || '';
+  document.getElementById('edit-type').value = card.type || '';
+  document.getElementById('edit-grade').value = card.grade || 'raw';
+  document.getElementById('edit-price').value = card.purchasePrice || '';
+  document.getElementById('edit-url').value = card.url || '';
+  document.getElementById('modal-overlay').classList.remove('active');
+  document.getElementById('edit-overlay').classList.add('active');
+}
+
+function closeEditModal() {
+  document.getElementById('edit-overlay').classList.remove('active');
+}
+
+async function saveEdit() {
+  const id = document.getElementById('edit-id').value;
+  const name = document.getElementById('edit-name').value.trim();
+  const set = document.getElementById('edit-set').value.trim();
+  const type = document.getElementById('edit-type').value;
+  const grade = document.getElementById('edit-grade').value;
+  const price = parseFloat(document.getElementById('edit-price').value);
+  const url = document.getElementById('edit-url').value.trim();
+  if (!name) { toast('Card name is required.', 'error'); return; }
+  if (!price || price <= 0) { toast('Please enter a valid price.', 'error'); return; }
+  const res = await fetch('/api/cards/' + id, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, set, type, grade, purchasePrice: price, url })
+  });
+  if (!res.ok) { toast('Failed to save changes.', 'error'); return; }
+  const idx = cards.findIndex(c => c.id === id);
+  if (idx > -1) cards[idx] = { ...cards[idx], name, set, type, grade, purchasePrice: price, url };
+  closeEditModal();
+  render();
+  toast('Card updated.', 'success');
+}
+
 function applyFilter() {
   activeTypeFilter = document.getElementById('filter-type').value;
   activeMoversFilter = document.getElementById('filter-movers').value;
@@ -154,11 +203,11 @@ function getFilteredCards() {
 function openCard(id) {
   const card = cards.find(c => c.id === id);
   if (!card) return;
+  editingCardId = id;
   const cost = Number(card.purchasePrice);
   const val = card.currentValue != null ? Number(card.currentValue) : null;
   const profit = val != null ? val - cost : null;
   const colors = getTypeColor(card.type);
-
   document.getElementById('modal-name').textContent = card.name;
   document.getElementById('modal-meta').textContent = (card.set || 'Unknown set') + (card.type ? ' · ' + card.type : '');
   const gradeEl = document.getElementById('modal-grade');
@@ -176,7 +225,6 @@ function openCard(id) {
   }
   document.getElementById('modal-updated').textContent = card.lastUpdated
     ? new Date(card.lastUpdated).toLocaleDateString('en-SG') : '—';
-
   const history = card.priceHistory || [];
   const emptyEl = document.getElementById('modal-chart-empty');
   const chartContainer = document.querySelector('.modal-chart-container');
@@ -233,6 +281,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     document.getElementById('modal-overlay').classList.remove('active');
     document.getElementById('confirm-overlay').classList.remove('active');
+    document.getElementById('edit-overlay').classList.remove('active');
   }
 });
 
