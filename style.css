@@ -41,6 +41,106 @@ body {
   font-family: var(--font-display);
   background: var(--bg);
   color: var(--text);
+
+  /* ── Search ── */
+.search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text3);
+  font-size: 16px;
+  pointer-events: none;
+  line-height: 1;
+}
+.search-input {
+  font-size: 13px;
+  padding: 8px 12px 8px 32px;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  background: var(--bg2);
+  color: var(--text);
+  outline: none;
+  font-family: var(--font-mono);
+  width: 240px;
+  transition: border-color 0.2s, width 0.2s;
+}
+.search-input:focus { border-color: var(--gold); width: 300px; }
+.search-input::placeholder { color: var(--text3); }
+
+/* ── Row edit button ── */
+.btn-row-edit {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text3);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+.btn-row-edit:hover { color: var(--gold); background: rgba(201,168,76,0.1); }
+
+/* ── Manual price button ── */
+.btn-manual-price {
+  font-size: 12px;
+  padding: 8px 16px;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text2);
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  transition: all 0.2s;
+  margin-right: 8px;
+}
+.btn-manual-price:hover { border-color: var(--gold); color: var(--gold); }
+
+/* ── Export button ── */
+.btn-export {
+  font-size: 12px;
+  padding: 9px 16px;
+  border: 1px solid var(--border2);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  transition: all 0.2s;
+}
+.btn-export:hover { border-color: var(--green); color: var(--green); }
+
+/* ── Reset button ── */
+.btn-reset {
+  font-size: 12px;
+  padding: 9px 16px;
+  border: 1px solid rgba(224,85,85,0.25);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text3);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  transition: all 0.2s;
+}
+.btn-reset:hover { border-color: var(--red); color: var(--red); background: rgba(224,85,85,0.07); }
+
+/* ── FX rate ── */
+#fx-rate { color: var(--text3); font-family: var(--font-mono); font-size: 11px; }
+
+/* ── Mobile ── */
+@media (max-width: 700px) {
+  .search-input { width: 100%; }
+  .search-input:focus { width: 100%; }
+  .search-wrap { margin-bottom: 8px; }
+  .btn-export, .btn-reset { padding: 9px 10px; }
+}
   min-height: 100vh;
   transition: background 0.3s, color 0.3s;
 }
