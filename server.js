@@ -110,8 +110,24 @@ app.put('/api/cards/:id', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+app.patch('/api/cards/:id', requireAuth, async (req, res) => {
+  const { name, set, type, grade, purchasePrice, url } = req.body;
+  const { error } = await supabase.from('cards').update({
+    name,
+    set_name: set,
+    type,
+    grade,
+    purchase_price: purchasePrice,
+    url
+  }).eq('id', req.params.id).eq('user_id', req.session.userId);
+  if (error) return res.status(500).json({ error: 'Failed to update card' });
+  res.json({ ok: true });
+});
+
 app.delete('/api/cards/:id', requireAuth, async (req, res) => {
-  const { error } = await supabase.from('cards').delete().eq('id', req.params.id).eq('user_id', req.session.userId);
+  const { error } = await supabase.from('cards').delete()
+    .eq('id', req.params.id)
+    .eq('user_id', req.session.userId);
   if (error) return res.status(500).json({ error: 'Failed to delete card' });
   res.json({ ok: true });
 });
