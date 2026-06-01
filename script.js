@@ -5,6 +5,7 @@ let colorEnabled = true;
 let activeTypeFilter = '';
 let activeMoversFilter = '';
 let editingCardId = null;
+let activeCollectionTab = 'active';
 
 const TYPE_COLORS = {
   'Fire':      { bg: 'rgba(255,100,50,0.12)', border: '#ff6432', chart: '#ff6432' },
@@ -63,7 +64,8 @@ async function loadCards() {
 }
 
 async function checkAutoRefresh() {
-  if (cards.length === 0) return;
+  const active = cards.filter(c => !c.sold);
+  if (active.length === 0) return;
   const lastRefresh = localStorage.getItem('lastRefresh');
   const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
   if (!lastRefresh || parseInt(lastRefresh) < oneDayAgo) {
@@ -117,6 +119,14 @@ function confirmDialog(message) {
   });
 }
 
+function switchTab(tab) {
+  activeCollectionTab = tab;
+  document.getElementById('tab-active').classList.toggle('active', tab === 'active');
+  document.getElementById('tab-sold').classList.toggle('active', tab === 'sold');
+  document.getElementById('panel-active').style.display = tab === 'active' ? 'block' : 'none';
+  document.getElementById('panel-sold').style.display = tab === 'sold' ? 'block' : 'none';
+}
+
 function toggleForm() {
   const f = document.getElementById('add-form');
   f.classList.toggle('open');
@@ -128,14 +138,18 @@ async function addCard() {
   const set = document.getElementById('f-set').value.trim();
   const type = document.getElementById('f-type').value;
   const grade = document.getElementById('f-grade').value;
+  const quantity = parseInt(document.getElementById('f-quantity').value) || 1;
   const price = parseFloat(document.getElementById('f-price').value);
+  const purchaseDate = document.getElementById('f-purchase-date').value;
+  const targetPrice = parseFloat(document.getElementById('f-target').value) || null;
+  const notes = document.getElementById('f-notes').value.trim();
   const url = document.getElementById('f-url').value.trim();
   if (!name) { toast('Please enter a card name.', 'error'); return; }
   if (!price || price <= 0) { toast('Please enter a valid purchase price.', 'error'); return; }
   const res = await fetch('/api/cards', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, set, type, grade, purchasePrice: price, currentValue: null, lastUpdated: null, url, priceHistory: [] })
+    body: JSON.stringify({ name, set, type, grade, quantity, purchasePrice: price, purchaseDate, targetPrice, notes, currentValue: null, lastUpdated: null, url, priceHistory: [] })
   });
   if (!res.ok) { toast('Failed to save card.', 'error'); return; }
   const card = await res.json();
@@ -143,11 +157,12 @@ async function addCard() {
   render();
   toggleForm();
   toast(name + ' added to your vault.', 'success');
-  document.getElementById('f-name').value = '';
-  document.getElementById('f-set').value = '';
-  document.getElementById('f-type').value = '';
-  document.getElementById('f-url').value = '';
+  ['f-name','f-set','f-url','f-notes'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-price').value = '';
+  document.getElementById('f-target').value = '';
+  document.getElementById('f-quantity').value = '1';
+  document.getElementById('f-purchase-date').value = '';
+  document.getElementById('f-type').value = '';
   document.getElementById('f-grade').value = 'raw';
 }
 
@@ -170,7 +185,11 @@ function openEditForm() {
   document.getElementById('edit-set').value = card.set || '';
   document.getElementById('edit-type').value = card.type || '';
   document.getElementById('edit-grade').value = card.grade || 'raw';
+  document.getElementById('edit-quantity').value = card.quantity || 1;
   document.getElementById('edit-price').value = card.purchasePrice || '';
+  document.getElementById('edit-purchase-date').value = card.purchaseDate || '';
+  document.getElementById('edit-target').value = card.targetPrice || '';
+  document.getElementById('edit-notes').value = card.notes || '';
   document.getElementById('edit-url').value = card.url || '';
   document.getElementById('modal-overlay').classList.remove('active');
   document.getElementById('edit-overlay').classList.add('active');
@@ -186,21 +205,59 @@ async function saveEdit() {
   const set = document.getElementById('edit-set').value.trim();
   const type = document.getElementById('edit-type').value;
   const grade = document.getElementById('edit-grade').value;
+  const quantity = parseInt(document.getElementById('edit-quantity').value) || 1;
   const price = parseFloat(document.getElementById('edit-price').value);
+  const purchaseDate = document.getElementById('edit-purchase-date').value;
+  const targetPrice = parseFloat(document.getElementById('edit-target').value) || null;
+  const notes = document.getElementById('edit-notes').value.trim();
   const url = document.getElementById('edit-url').value.trim();
   if (!name) { toast('Card name is required.', 'error'); return; }
   if (!price || price <= 0) { toast('Please enter a valid price.', 'error'); return; }
   const res = await fetch('/api/cards/' + id, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, set, type, grade, purchasePrice: price, url })
+    body: JSON.stringify({ name, set, type, grade, quantity, purchasePrice: price, purchaseDate, targetPrice, notes, url })
   });
   if (!res.ok) { toast('Failed to save changes.', 'error'); return; }
   const idx = cards.findIndex(c => c.id === id);
-  if (idx > -1) cards[idx] = { ...cards[idx], name, set, type, grade, purchasePrice: price, url };
+  if (idx > -1) cards[idx] = { ...cards[idx], name, set, type, grade, quantity, purchasePrice: price, purchaseDate, targetPrice, notes, url };
   closeEditModal();
   render();
   toast('Card updated.', 'success');
+}
+
+function openSellForm() {
+  const card = cards.find(c => c.id === editingCardId);
+  if (!card) return;
+  document.getElementById('sell-id').value = card.id;
+  document.getElementById('sell-price').value = card.currentValue || '';
+  document.getElementById('sell-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('sell-to').value = '';
+  document.getElementById('modal-overlay').classList.remove('active');
+  document.getElementById('sell-overlay').classList.add('active');
+}
+
+function closeSellModal() {
+  document.getElementById('sell-overlay').classList.remove('active');
+}
+
+async function confirmSell() {
+  const id = document.getElementById('sell-id').value;
+  const soldPrice = parseFloat(document.getElementById('sell-price').value);
+  const soldDate = document.getElementById('sell-date').value;
+  const soldTo = document.getElementById('sell-to').value.trim();
+  if (!soldPrice || soldPrice <= 0) { toast('Please enter a valid sale price.', 'error'); return; }
+  const res = await fetch('/api/cards/' + id, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sold: true, soldPrice, soldDate, soldTo })
+  });
+  if (!res.ok) { toast('Failed to mark as sold.', 'error'); return; }
+  const idx = cards.findIndex(c => c.id === id);
+  if (idx > -1) cards[idx] = { ...cards[idx], sold: true, soldPrice, soldDate, soldTo };
+  closeSellModal();
+  render();
+  toast('Card marked as sold.', 'success');
 }
 
 function applyFilter() {
@@ -210,7 +267,7 @@ function applyFilter() {
 }
 
 function getFilteredCards() {
-  let filtered = [...cards];
+  let filtered = cards.filter(c => !c.sold);
   if (activeTypeFilter) filtered = filtered.filter(c => c.type === activeTypeFilter);
   if (activeMoversFilter) {
     const priced = filtered.filter(c => c.currentValue != null);
@@ -231,19 +288,20 @@ function openCard(id) {
   editingCardId = id;
   const cost = Number(card.purchasePrice);
   const val = card.currentValue != null ? Number(card.currentValue) : null;
-  const profit = val != null ? val - cost : null;
+  const profit = val != null ? (val - cost) * (card.quantity || 1) : null;
   const colors = getTypeColor(card.type);
 
   const typeBar = document.getElementById('modal-type-bar');
   if (typeBar) typeBar.style.background = colors.border;
 
-  document.getElementById('modal-name').textContent = card.name;
+  document.getElementById('modal-name').textContent = card.name + (card.quantity > 1 ? ' ×' + card.quantity : '');
   document.getElementById('modal-meta').textContent = (card.set || 'Unknown set') + (card.type ? ' · ' + card.type : '');
   const gradeEl = document.getElementById('modal-grade');
   gradeEl.textContent = card.grade;
   gradeEl.className = 'badge ' + (card.grade === 'raw' ? 'badge-raw' : 'badge-psa');
-  document.getElementById('modal-cost').textContent = 'SGD $' + cost.toFixed(2);
-  document.getElementById('modal-value').textContent = val != null ? 'SGD $' + val.toFixed(2) : '—';
+  document.getElementById('modal-cost').textContent = 'SGD $' + (cost * (card.quantity || 1)).toFixed(2);
+  document.getElementById('modal-value').textContent = val != null ? 'SGD $' + (val * (card.quantity || 1)).toFixed(2) : '—';
+
   const profitEl = document.getElementById('modal-profit');
   if (profit != null) {
     profitEl.textContent = (profit >= 0 ? '↑ +' : '↓ ') + 'SGD $' + Math.abs(profit).toFixed(2);
@@ -252,8 +310,29 @@ function openCard(id) {
     profitEl.textContent = '—';
     profitEl.className = 'modal-stat-value';
   }
+
   document.getElementById('modal-updated').textContent = card.lastUpdated
     ? new Date(card.lastUpdated).toLocaleDateString('en-SG') : '—';
+  document.getElementById('modal-purchase-date').textContent = card.purchaseDate || '—';
+
+  const targetEl = document.getElementById('modal-target');
+  if (card.targetPrice) {
+    const hit = val != null && val >= card.targetPrice;
+    targetEl.textContent = 'SGD $' + Number(card.targetPrice).toFixed(2) + (hit ? ' ✓ Target reached!' : '');
+    targetEl.style.color = hit ? 'var(--green)' : 'var(--text)';
+  } else {
+    targetEl.textContent = '—';
+    targetEl.style.color = '';
+  }
+
+  const notesWrap = document.getElementById('modal-notes-wrap');
+  const notesEl = document.getElementById('modal-notes');
+  if (card.notes) {
+    notesWrap.style.display = 'block';
+    notesEl.textContent = card.notes;
+  } else {
+    notesWrap.style.display = 'none';
+  }
 
   const history = card.priceHistory || [];
   const emptyEl = document.getElementById('modal-chart-empty');
@@ -301,16 +380,8 @@ function openCard(id) {
           }
         },
         scales: {
-          y: {
-            ticks: { callback: v => '$' + v, font: { size: 11, family: 'DM Mono' }, color: 'var(--text3)' },
-            grid: { color: 'var(--border)' },
-            border: { display: false }
-          },
-          x: {
-            ticks: { font: { size: 11, family: 'DM Mono' }, color: 'var(--text3)' },
-            grid: { display: false },
-            border: { display: false }
-          }
+          y: { ticks: { callback: v => '$' + v, font: { size: 11, family: 'DM Mono' }, color: 'var(--text3)' }, grid: { color: 'var(--border)' }, border: { display: false } },
+          x: { ticks: { font: { size: 11, family: 'DM Mono' }, color: 'var(--text3)' }, grid: { display: false }, border: { display: false } }
         }
       }
     });
@@ -326,9 +397,9 @@ function closeModal(e) {
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    document.getElementById('modal-overlay').classList.remove('active');
-    document.getElementById('confirm-overlay').classList.remove('active');
-    document.getElementById('edit-overlay').classList.remove('active');
+    ['modal-overlay','confirm-overlay','edit-overlay','sell-overlay'].forEach(id => {
+      document.getElementById(id).classList.remove('active');
+    });
     if (priceChart) { priceChart.destroy(); priceChart = null; }
   }
 });
@@ -363,7 +434,7 @@ function getSortedCards(list) {
 }
 
 function renderMovers() {
-  const priced = cards.filter(c => c.currentValue != null);
+  const priced = cards.filter(c => !c.sold && c.currentValue != null);
   if (priced.length < 2) { document.getElementById('movers-section').style.display = 'none'; return; }
   document.getElementById('movers-section').style.display = 'block';
   const sorted = [...priced].sort((a, b) => {
@@ -389,67 +460,118 @@ function renderMovers() {
   document.getElementById('movers-losers').innerHTML = bottom.map(moverCard).join('');
 }
 
+function checkTargetAlerts() {
+  const active = cards.filter(c => !c.sold && c.targetPrice && c.currentValue != null);
+  const hits = active.filter(c => Number(c.currentValue) >= Number(c.targetPrice));
+  hits.forEach(c => {
+    toast('🎯 ' + c.name + ' hit your target of SGD $' + Number(c.targetPrice).toFixed(2) + '!', 'success');
+  });
+}
+
 function render() {
   const tbody = document.getElementById('card-table');
   const cardList = document.getElementById('card-list');
   const filtered = getFilteredCards();
   const sorted = getSortedCards(filtered);
+  const soldCards = cards.filter(c => c.sold);
 
-  if (cards.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">Your vault is empty — add your first card to get started</div></td></tr>';
+  if (cards.filter(c => !c.sold).length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state">Your vault is empty — add your first card to get started</div></td></tr>';
     cardList.innerHTML = '<div class="empty-state">Your vault is empty — add your first card to get started</div>';
-    updateSummary();
-    renderMovers();
-    return;
+  } else {
+    tbody.innerHTML = sorted.map(c => {
+      const cost = Number(c.purchasePrice) * (c.quantity || 1);
+      const val = c.currentValue != null ? Number(c.currentValue) * (c.quantity || 1) : null;
+      const profit = val != null ? val - cost : null;
+      const profitStr = profit != null ? (profit >= 0 ? '↑ +' : '↓ ') + 'SGD $' + Math.abs(profit).toFixed(2) : '—';
+      const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
+      const gradeClass = c.grade === 'raw' ? 'badge-raw' : 'badge-psa';
+      const updated = c.lastUpdated ? new Date(c.lastUpdated).toLocaleDateString('en-SG') : '—';
+      const colors = getTypeColor(c.type);
+      const typeBadge = c.type
+        ? '<span class="type-badge" style="background:' + colors.bg + '; color:' + colors.border + '; border: 1px solid ' + colors.border + ';">' + esc(c.type) + '</span>'
+        : '<span class="type-badge type-unknown">—</span>';
+      const targetHit = c.targetPrice && c.currentValue != null && Number(c.currentValue) >= Number(c.targetPrice);
+      const rowStyle = 'border-left: 3px solid ' + colors.border + (targetHit ? '; box-shadow: inset 0 0 0 1px rgba(76,175,125,0.3);' : '') + ';';
+      return '<tr class="card-row' + (targetHit ? ' target-hit' : '') + '" onclick="openCard(\'' + c.id + '\')" style="' + rowStyle + '">' +
+        '<td title="' + esc(c.name) + '" style="font-weight:600;">' + esc(c.name) + (targetHit ? ' <span style="color:var(--green); font-size:11px;">🎯</span>' : '') + '</td>' +
+        '<td title="' + esc(c.set || '—') + '" style="color:var(--text2);">' + esc(c.set || '—') + '</td>' +
+        '<td>' + typeBadge + '</td>' +
+        '<td><span class="badge ' + gradeClass + '">' + esc(c.grade) + '</span></td>' +
+        '<td style="font-family:var(--font-mono); color:var(--text2);">×' + (c.quantity || 1) + '</td>' +
+        '<td style="font-family:var(--font-mono);">$' + cost.toFixed(2) + '</td>' +
+        '<td style="font-family:var(--font-mono);">' + (val != null ? '$' + val.toFixed(2) : '—') + '</td>' +
+        '<td class="' + profitClass + '" style="font-family:var(--font-mono); font-weight:600;">' + profitStr + '</td>' +
+        '<td style="color:var(--text3); font-family:var(--font-mono); font-size:12px;">' + updated + '</td>' +
+        '<td><button class="del-btn" onclick="event.stopPropagation(); deleteCard(\'' + c.id + '\')" title="Delete">✕</button></td>' +
+      '</tr>';
+    }).join('');
+
+    cardList.innerHTML = sorted.map(c => {
+      const cost = Number(c.purchasePrice) * (c.quantity || 1);
+      const val = c.currentValue != null ? Number(c.currentValue) * (c.quantity || 1) : null;
+      const profit = val != null ? val - cost : null;
+      const profitStr = profit != null ? (profit >= 0 ? '↑ +' : '↓ -') + 'SGD $' + Math.abs(profit).toFixed(2) : '—';
+      const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
+      const gradeClass = c.grade === 'raw' ? 'badge-raw' : 'badge-psa';
+      const colors = getTypeColor(c.type);
+      const targetHit = c.targetPrice && c.currentValue != null && Number(c.currentValue) >= Number(c.targetPrice);
+      return '<div class="mobile-card' + (targetHit ? ' target-hit' : '') + '" style="border-left: 3px solid ' + colors.border + ';" onclick="openCard(\'' + c.id + '\')">' +
+        '<div class="mobile-card-top">' +
+          '<div><div class="mobile-card-name">' + esc(c.name) + (targetHit ? ' 🎯' : '') + '</div>' +
+          '<div class="mobile-card-set">' + esc(c.set || '—') + ' · <span class="badge ' + gradeClass + '">' + esc(c.grade) + '</span>' + (c.quantity > 1 ? ' ×' + c.quantity : '') + '</div></div>' +
+          '<button class="mobile-card-delete" onclick="event.stopPropagation(); deleteCard(\'' + c.id + '\')" title="Delete">✕</button>' +
+        '</div>' +
+        '<div class="mobile-card-bottom">' +
+          '<div class="mobile-card-price">Paid: SGD $' + cost.toFixed(2) + '<br>Value: ' + fmt(val) + '</div>' +
+          '<div class="mobile-card-profit ' + profitClass + '">' + profitStr + '</div>' +
+        '</div></div>';
+    }).join('');
   }
 
-  tbody.innerHTML = sorted.map(c => {
-    const cost = Number(c.purchasePrice);
-    const val = c.currentValue != null ? Number(c.currentValue) : null;
-    const profit = val != null ? val - cost : null;
-    const profitStr = profit != null ? (profit >= 0 ? '↑ +' : '↓ ') + 'SGD $' + Math.abs(profit).toFixed(2) : '—';
-    const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
-    const gradeClass = c.grade === 'raw' ? 'badge-raw' : 'badge-psa';
-    const updated = c.lastUpdated ? new Date(c.lastUpdated).toLocaleDateString('en-SG') : '—';
-    const colors = getTypeColor(c.type);
-    const typeBadge = c.type
-      ? '<span class="type-badge" style="background:' + colors.bg + '; color:' + colors.border + '; border: 1px solid ' + colors.border + ';">' + esc(c.type) + '</span>'
-      : '<span class="type-badge type-unknown">—</span>';
-    return '<tr class="card-row" onclick="openCard(\'' + c.id + '\')" style="border-left: 3px solid ' + colors.border + '">' +
-      '<td title="' + esc(c.name) + '" style="font-weight:600;">' + esc(c.name) + '</td>' +
-      '<td title="' + esc(c.set || '—') + '" style="color:var(--text2);">' + esc(c.set || '—') + '</td>' +
-      '<td>' + typeBadge + '</td>' +
-      '<td><span class="badge ' + gradeClass + '">' + esc(c.grade) + '</span></td>' +
-      '<td style="font-family:var(--font-mono);">$' + cost.toFixed(2) + '</td>' +
-      '<td style="font-family:var(--font-mono);">' + (val != null ? '$' + val.toFixed(2) : '—') + '</td>' +
-      '<td class="' + profitClass + '" style="font-family:var(--font-mono); font-weight:600;">' + profitStr + '</td>' +
-      '<td style="color:var(--text3); font-family:var(--font-mono); font-size:12px;">' + updated + '</td>' +
-      '<td><button class="del-btn" onclick="event.stopPropagation(); deleteCard(\'' + c.id + '\')" title="Delete">✕</button></td>' +
-    '</tr>';
-  }).join('');
+  // Sold table
+  const soldTbody = document.getElementById('sold-table');
+  const soldList = document.getElementById('sold-list');
+  if (soldCards.length === 0) {
+    soldTbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">No sold cards yet</div></td></tr>';
+    soldList.innerHTML = '<div class="empty-state">No sold cards yet</div>';
+  } else {
+    soldTbody.innerHTML = soldCards.map(c => {
+      const profit = c.soldPrice ? (Number(c.soldPrice) - Number(c.purchasePrice)) * (c.quantity || 1) : null;
+      const profitStr = profit != null ? (profit >= 0 ? '↑ +' : '↓ ') + 'SGD $' + Math.abs(profit).toFixed(2) : '—';
+      const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
+      return '<tr>' +
+        '<td style="font-weight:600;">' + esc(c.name) + '</td>' +
+        '<td style="color:var(--text2);">' + esc(c.set || '—') + '</td>' +
+        '<td><span class="badge ' + (c.grade === 'raw' ? 'badge-raw' : 'badge-psa') + '">' + esc(c.grade) + '</span></td>' +
+        '<td style="font-family:var(--font-mono);">$' + (Number(c.purchasePrice) * (c.quantity || 1)).toFixed(2) + '</td>' +
+        '<td style="font-family:var(--font-mono);">' + (c.soldPrice ? '$' + Number(c.soldPrice).toFixed(2) : '—') + '</td>' +
+        '<td class="' + profitClass + '" style="font-family:var(--font-mono); font-weight:600;">' + profitStr + '</td>' +
+        '<td style="color:var(--text3); font-family:var(--font-mono); font-size:12px;">' + (c.soldDate || '—') + '</td>' +
+        '<td style="color:var(--text2); font-size:12px;">' + esc(c.soldTo || '—') + '</td>' +
+        '<td><button class="del-btn" onclick="deleteCard(\'' + c.id + '\')" title="Delete">✕</button></td>' +
+      '</tr>';
+    }).join('');
 
-  cardList.innerHTML = sorted.map(c => {
-    const cost = Number(c.purchasePrice);
-    const val = c.currentValue != null ? Number(c.currentValue) : null;
-    const profit = val != null ? val - cost : null;
-    const profitStr = profit != null ? (profit >= 0 ? '↑ +' : '↓ -') + 'SGD $' + Math.abs(profit).toFixed(2) : '—';
-    const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
-    const gradeClass = c.grade === 'raw' ? 'badge-raw' : 'badge-psa';
-    const colors = getTypeColor(c.type);
-    return '<div class="mobile-card" style="border-left: 3px solid ' + colors.border + ';" onclick="openCard(\'' + c.id + '\')">' +
-      '<div class="mobile-card-top">' +
-        '<div><div class="mobile-card-name">' + esc(c.name) + '</div>' +
-        '<div class="mobile-card-set">' + esc(c.set || '—') + ' · <span class="badge ' + gradeClass + '">' + esc(c.grade) + '</span></div></div>' +
-        '<button class="mobile-card-delete" onclick="event.stopPropagation(); deleteCard(\'' + c.id + '\')" title="Delete">✕</button>' +
-      '</div>' +
-      '<div class="mobile-card-bottom">' +
-        '<div class="mobile-card-price">Paid: SGD $' + cost.toFixed(2) + '<br>Value: ' + fmt(val) + '</div>' +
-        '<div class="mobile-card-profit ' + profitClass + '">' + profitStr + '</div>' +
-      '</div></div>';
-  }).join('');
+    soldList.innerHTML = soldCards.map(c => {
+      const profit = c.soldPrice ? (Number(c.soldPrice) - Number(c.purchasePrice)) * (c.quantity || 1) : null;
+      const profitStr = profit != null ? (profit >= 0 ? '+' : '') + 'SGD $' + profit.toFixed(2) : '—';
+      const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
+      return '<div class="mobile-card">' +
+        '<div class="mobile-card-top">' +
+          '<div><div class="mobile-card-name">' + esc(c.name) + '</div>' +
+          '<div class="mobile-card-set">' + esc(c.set || '—') + ' · sold ' + (c.soldDate || '—') + '</div></div>' +
+        '</div>' +
+        '<div class="mobile-card-bottom">' +
+          '<div class="mobile-card-price">Paid: SGD $' + Number(c.purchasePrice).toFixed(2) + '<br>Sold: ' + (c.soldPrice ? 'SGD $' + Number(c.soldPrice).toFixed(2) : '—') + '</div>' +
+          '<div class="mobile-card-profit ' + profitClass + '">' + profitStr + '</div>' +
+        '</div></div>';
+    }).join('');
+  }
 
   updateSummary();
   renderMovers();
+  checkTargetAlerts();
 }
 
 function esc(str) {
@@ -457,32 +579,30 @@ function esc(str) {
 }
 
 function updateSummary() {
-  const count = cards.length;
-  const cost = cards.reduce((s, c) => s + Number(c.purchasePrice), 0);
-  const value = cards.reduce((s, c) => s + (c.currentValue != null ? Number(c.currentValue) : Number(c.purchasePrice)), 0);
+  const active = cards.filter(c => !c.sold);
+  const sold = cards.filter(c => c.sold);
+  const count = active.reduce((s, c) => s + (c.quantity || 1), 0);
+  const cost = active.reduce((s, c) => s + Number(c.purchasePrice) * (c.quantity || 1), 0);
+  const value = active.reduce((s, c) => s + (c.currentValue != null ? Number(c.currentValue) : Number(c.purchasePrice)) * (c.quantity || 1), 0);
   const profit = value - cost;
+  const realised = sold.reduce((s, c) => s + (c.soldPrice ? (Number(c.soldPrice) - Number(c.purchasePrice)) * (c.quantity || 1) : 0), 0);
 
   document.getElementById('s-count').textContent = count;
+  animateValue(document.getElementById('s-cost'), cost, 'SGD ');
+  animateValue(document.getElementById('s-value'), value, 'SGD ');
+  if (document.getElementById('header-value')) animateValue(document.getElementById('header-value'), value, 'SGD ');
 
-  const costEl = document.getElementById('s-cost');
-  const valueEl = document.getElementById('s-value');
-  const profitEl = document.getElementById('s-profit');
-  const headerVal = document.getElementById('header-value');
+  const pel = document.getElementById('s-profit');
+  pel.textContent = (profit >= 0 ? '↑ +SGD ' : '↓ -SGD ') + '$' + Math.abs(profit).toFixed(2);
+  pel.className = 'metric-value ' + (profit >= 0 ? 'pos' : 'neg');
 
-  animateValue(costEl, cost, 'SGD ');
-  animateValue(valueEl, value, 'SGD ');
-  if (headerVal) animateValue(headerVal, value, 'SGD ');
-
-  const profitPrefix = profit >= 0 ? '↑ +SGD ' : '↓ -SGD ';
-  profitEl.textContent = profitPrefix + '$' + Math.abs(profit).toFixed(2);
-  profitEl.className = 'metric-value ' + (profit >= 0 ? 'pos' : 'neg');
+  const rel = document.getElementById('s-realised');
+  rel.textContent = (realised >= 0 ? '+SGD $' : '-SGD $') + Math.abs(realised).toFixed(2);
+  rel.className = 'metric-value ' + (realised >= 0 ? 'pos' : 'neg');
 
   const profitCard = document.querySelector('.profit-card');
   const profitIcon = document.getElementById('profit-icon');
-  if (profitCard) {
-    profitCard.classList.toggle('pos', profit >= 0);
-    profitCard.classList.toggle('neg', profit < 0);
-  }
+  if (profitCard) { profitCard.classList.toggle('pos', profit >= 0); profitCard.classList.toggle('neg', profit < 0); }
   if (profitIcon) profitIcon.textContent = profit >= 0 ? '💰' : '📉';
 }
 
@@ -516,42 +636,41 @@ async function fetchPrice(card) {
 }
 
 function isSameDay(ts1, ts2) {
-  const d1 = new Date(ts1);
-  const d2 = new Date(ts2);
+  const d1 = new Date(ts1); const d2 = new Date(ts2);
   return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 }
 
 async function refreshPrices(silent) {
-  if (cards.length === 0) { if (!silent) toast('No cards to refresh.', 'info'); return; }
+  const active = cards.filter(c => !c.sold);
+  if (active.length === 0) { if (!silent) toast('No cards to refresh.', 'info'); return; }
   const btn = document.querySelector('.btn-refresh');
   btn.disabled = true;
   btn.textContent = '↻ Fetching...';
   let updated = 0;
-  for (let i = 0; i < cards.length; i++) {
+  for (let i = 0; i < active.length; i++) {
     try {
-      const price = await fetchPrice(cards[i]);
+      const price = await fetchPrice(active[i]);
       if (price != null) {
         const now = Date.now();
-        cards[i].currentValue = price;
-        cards[i].lastUpdated = now;
-        if (!cards[i].priceHistory) cards[i].priceHistory = [];
-        const history = cards[i].priceHistory;
+        const idx = cards.findIndex(c => c.id === active[i].id);
+        cards[idx].currentValue = price;
+        cards[idx].lastUpdated = now;
+        if (!cards[idx].priceHistory) cards[idx].priceHistory = [];
+        const history = cards[idx].priceHistory;
         const lastEntry = history[history.length - 1];
         if (!lastEntry || !isSameDay(lastEntry.date, now)) {
           history.push({ date: now, value: price });
         } else {
           history[history.length - 1] = { date: now, value: price };
         }
-        await fetch('/api/cards/' + cards[i].id, {
+        await fetch('/api/cards/' + cards[idx].id, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ currentValue: price, lastUpdated: now, priceHistory: history })
         });
         updated++;
       }
-    } catch (e) {
-      console.error('Failed for ' + cards[i].name, e);
-    }
+    } catch (e) { console.error('Failed for ' + active[i].name, e); }
     await new Promise(r => setTimeout(r, 800));
   }
   localStorage.setItem('lastRefresh', Date.now().toString());
