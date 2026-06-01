@@ -1,9 +1,11 @@
-const USD_TO_SGD = 1.35;
+let USD_TO_SGD = 1.35; // fallback, will be updated from live rate
 let cards = [];
 let priceChart = null;
 let colorEnabled = true;
 let activeTypeFilter = '';
+let activeSetFilter = '';
 let activeMoversFilter = '';
+let searchQuery = '';
 let editingCardId = null;
 let activeCollectionTab = 'active';
 
@@ -42,11 +44,29 @@ window.addEventListener('scroll', () => {
   if (header) header.classList.toggle('scrolled', window.scrollY > 20);
 });
 
+// ── Live exchange rate ──────────────────────────────────────────────
+async function fetchExchangeRate() {
+  try {
+    const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.rates && data.rates.SGD) {
+      USD_TO_SGD = data.rates.SGD;
+      const el = document.getElementById('fx-rate');
+      if (el) el.textContent = 'USD/SGD: ' + USD_TO_SGD.toFixed(4);
+    }
+  } catch (e) {
+    console.warn('Could not fetch exchange rate, using fallback 1.35');
+  }
+}
+
+// ── Init ────────────────────────────────────────────────────────────
 async function init() {
   const res = await fetch('/api/me');
   if (!res.ok) { window.location.href = '/login.html'; return; }
   const { username } = await res.json();
   document.getElementById('username-display').textContent = username;
+  await fetchExchangeRate();
   await loadCards();
   checkAutoRefresh();
 }
@@ -133,6 +153,15 @@ function toggleForm() {
   if (f.classList.contains('open')) document.getElementById('f-name').focus();
 }
 
+// ── Set filter ──────────────────────────────────────────────────────
+function populateSetFilter() {
+  const sets = [...new Set(cards.filter(c => !c.sold && c.set).map(c => c.set))].sort();
+  const sel = document.getElementById('filter-set');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All sets</option>' + sets.map(s => `<option value="${esc(s)}"${s === current ? ' selected' : ''}>${esc(s)}</option>`).join('');
+}
+
+// ── Add card ────────────────────────────────────────────────────────
 async function addCard() {
   const name = document.getElementById('f-name').value.trim();
   const set = document.getElementById('f-set').value.trim();
@@ -166,6 +195,7 @@ async function addCard() {
   document.getElementById('f-grade').value = 'raw';
 }
 
+// ── Delete card ─────────────────────────────────────────────────────
 async function deleteCard(id) {
   const card = cards.find(c => c.id === id);
   const confirmed = await confirmDialog('Remove "' + (card ? card.name : 'this card') + '" from your vault?');
@@ -177,8 +207,28 @@ async function deleteCard(id) {
   toast('Card removed.', 'info');
 }
 
-function openEditForm() {
-  const card = cards.find(c => c.id === editingCardId);
+// ── Reset all cards ─────────────────────────────────────────────────
+async function resetVault() {
+  const confirmed = await confirmDialog('Delete ALL cards from your vault? This cannot be undone.');
+  if (!confirmed) return;
+  const active = [...cards];
+  let failed = 0;
+  for (const card of active) {
+    const res = await fetch('/api/cards/' + card.id, { method: 'DELETE' });
+    if (!res.ok) failed++;
+  }
+  if (failed > 0) { toast(failed + ' cards could not be deleted.', 'error'); }
+  cards = [];
+  render();
+  toast('Vault reset. All cards removed.', 'info');
+}
+
+// ── Edit modal ──────────────────────────────────────────────────────
+function openEditForm(idOverride) {
+  const targetId = idOverride || editingCardId;
+  if (!targetId) return;
+  editingCardId = targetId;
+  const card = cards.find(c => c.id === targetId);
   if (!card) return;
   document.getElementById('edit-id').value = card.id;
   document.getElementById('edit-name').value = card.name || '';
@@ -226,6 +276,7 @@ async function saveEdit() {
   toast('Card updated.', 'success');
 }
 
+// ── Sell modal ──────────────────────────────────────────────────────
 function openSellForm() {
   const card = cards.find(c => c.id === editingCardId);
   if (!card) return;
@@ -260,15 +311,67 @@ async function confirmSell() {
   toast('Card marked as sold.', 'success');
 }
 
+// ── Manual price override ───────────────────────────────────────────
+function openManualPrice() {
+  const card = cards.find(c => c.id === editingCardId);
+  if (!card) return;
+  document.getElementById('manual-price-id').value = card.id;
+  document.getElementById('manual-price-val').value = card.currentValue || '';
+  document.getElementById('modal-overlay').classList.remove('active');
+  document.getElementById('manual-price-overlay').classList.add('active');
+  setTimeout(() => document.getElementById('manual-price-val').focus(), 100);
+}
+
+function closeManualPriceModal() {
+  document.getElementById('manual-price-overlay').classList.remove('active');
+}
+
+async function saveManualPrice() {
+  const id = document.getElementById('manual-price-id').value;
+  const val = parseFloat(document.getElementById('manual-price-val').value);
+  if (!val || val <= 0) { toast('Please enter a valid price.', 'error'); return; }
+  const now = Date.now();
+  const idx = cards.findIndex(c => c.id === id);
+  if (idx < 0) return;
+  const history = cards[idx].priceHistory || [];
+  const lastEntry = history[history.length - 1];
+  if (!lastEntry || !isSameDay(lastEntry.date, now)) {
+    history.push({ date: now, value: val });
+  } else {
+    history[history.length - 1] = { date: now, value: val };
+  }
+  const res = await fetch('/api/cards/' + id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentValue: val, lastUpdated: now, priceHistory: history })
+  });
+  if (!res.ok) { toast('Failed to save price.', 'error'); return; }
+  cards[idx].currentValue = val;
+  cards[idx].lastUpdated = now;
+  cards[idx].priceHistory = history;
+  closeManualPriceModal();
+  render();
+  toast('Price updated manually.', 'success');
+}
+
+// ── Filters ─────────────────────────────────────────────────────────
 function applyFilter() {
   activeTypeFilter = document.getElementById('filter-type').value;
+  activeSetFilter = document.getElementById('filter-set').value;
   activeMoversFilter = document.getElementById('filter-movers').value;
+  render();
+}
+
+function applySearch() {
+  searchQuery = document.getElementById('search-input').value.trim().toLowerCase();
   render();
 }
 
 function getFilteredCards() {
   let filtered = cards.filter(c => !c.sold);
+  if (searchQuery) filtered = filtered.filter(c => c.name.toLowerCase().includes(searchQuery) || (c.set || '').toLowerCase().includes(searchQuery));
   if (activeTypeFilter) filtered = filtered.filter(c => c.type === activeTypeFilter);
+  if (activeSetFilter) filtered = filtered.filter(c => c.set === activeSetFilter);
   if (activeMoversFilter) {
     const priced = filtered.filter(c => c.currentValue != null);
     const sorted = [...priced].sort((a, b) => {
@@ -282,6 +385,41 @@ function getFilteredCards() {
   return filtered;
 }
 
+// ── CSV Export ───────────────────────────────────────────────────────
+function exportCSV() {
+  const active = cards.filter(c => !c.sold);
+  const sold = cards.filter(c => c.sold);
+  const all = [...active, ...sold];
+  if (all.length === 0) { toast('No cards to export.', 'info'); return; }
+
+  const headers = ['Name','Set','Type','Grade','Quantity','Purchase Price (SGD)','Current Value (SGD)','P/L (SGD)','Purchase Date','Target Price','Notes','Status','Sold Price','Sold Date','Sold To'];
+  const rows = all.map(c => {
+    const cost = Number(c.purchasePrice) * (c.quantity || 1);
+    const val = c.sold ? Number(c.soldPrice || 0) * (c.quantity || 1) : (c.currentValue != null ? Number(c.currentValue) * (c.quantity || 1) : '');
+    const pl = c.sold
+      ? ((Number(c.soldPrice || 0) - Number(c.purchasePrice)) * (c.quantity || 1)).toFixed(2)
+      : (c.currentValue != null ? ((Number(c.currentValue) - Number(c.purchasePrice)) * (c.quantity || 1)).toFixed(2) : '');
+    return [
+      c.name, c.set || '', c.type || '', c.grade || '', c.quantity || 1,
+      cost.toFixed(2), val !== '' ? Number(val).toFixed(2) : '',
+      pl, c.purchaseDate || '', c.targetPrice || '', c.notes || '',
+      c.sold ? 'Sold' : 'Active',
+      c.sold ? (c.soldPrice || '') : '', c.sold ? (c.soldDate || '') : '', c.sold ? (c.soldTo || '') : ''
+    ].map(v => '"' + String(v).replace(/"/g, '""') + '"');
+  });
+
+  const csv = [headers.map(h => '"' + h + '"').join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'pokevault-collection-' + new Date().toISOString().split('T')[0] + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Collection exported as CSV.', 'success');
+}
+
+// ── Card detail modal ────────────────────────────────────────────────
 function openCard(id) {
   const card = cards.find(c => c.id === id);
   if (!card) return;
@@ -397,7 +535,7 @@ function closeModal(e) {
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    ['modal-overlay','confirm-overlay','edit-overlay','sell-overlay'].forEach(id => {
+    ['modal-overlay','confirm-overlay','edit-overlay','sell-overlay','manual-price-overlay'].forEach(id => {
       document.getElementById(id).classList.remove('active');
     });
     if (priceChart) { priceChart.destroy(); priceChart = null; }
@@ -469,6 +607,7 @@ function checkTargetAlerts() {
 }
 
 function render() {
+  populateSetFilter();
   const tbody = document.getElementById('card-table');
   const cardList = document.getElementById('card-list');
   const filtered = getFilteredCards();
@@ -476,8 +615,11 @@ function render() {
   const soldCards = cards.filter(c => c.sold);
 
   if (cards.filter(c => !c.sold).length === 0) {
-    tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state">Your vault is empty — add your first card to get started</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state">Your vault is empty — add your first card to get started</div></td></tr>';
     cardList.innerHTML = '<div class="empty-state">Your vault is empty — add your first card to get started</div>';
+  } else if (sorted.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state">No cards match your filters</div></td></tr>';
+    cardList.innerHTML = '<div class="empty-state">No cards match your filters</div>';
   } else {
     tbody.innerHTML = sorted.map(c => {
       const cost = Number(c.purchasePrice) * (c.quantity || 1);
@@ -500,9 +642,10 @@ function render() {
         '<td><span class="badge ' + gradeClass + '">' + esc(c.grade) + '</span></td>' +
         '<td style="font-family:var(--font-mono); color:var(--text2);">×' + (c.quantity || 1) + '</td>' +
         '<td style="font-family:var(--font-mono);">$' + cost.toFixed(2) + '</td>' +
-        '<td style="font-family:var(--font-mono);">' + (val != null ? '$' + val.toFixed(2) : '—') + '</td>' +
+        '<td style="font-family:var(--font-mono);">' + (val != null ? '$' + val.toFixed(2) : '<span style="color:var(--text3);">—</span>') + '</td>' +
         '<td class="' + profitClass + '" style="font-family:var(--font-mono); font-weight:600;">' + profitStr + '</td>' +
         '<td style="color:var(--text3); font-family:var(--font-mono); font-size:12px;">' + updated + '</td>' +
+        '<td><button class="btn-row-edit" onclick="event.stopPropagation(); openEditForm(\'' + c.id + '\')" title="Edit">✎</button></td>' +
         '<td><button class="del-btn" onclick="event.stopPropagation(); deleteCard(\'' + c.id + '\')" title="Delete">✕</button></td>' +
       '</tr>';
     }).join('');
@@ -520,7 +663,10 @@ function render() {
         '<div class="mobile-card-top">' +
           '<div><div class="mobile-card-name">' + esc(c.name) + (targetHit ? ' 🎯' : '') + '</div>' +
           '<div class="mobile-card-set">' + esc(c.set || '—') + ' · <span class="badge ' + gradeClass + '">' + esc(c.grade) + '</span>' + (c.quantity > 1 ? ' ×' + c.quantity : '') + '</div></div>' +
+          '<div style="display:flex;gap:8px;align-items:center;">' +
+          '<button class="mobile-card-delete" onclick="event.stopPropagation(); openEditForm(\'' + c.id + '\')" title="Edit" style="font-size:14px;">✎</button>' +
           '<button class="mobile-card-delete" onclick="event.stopPropagation(); deleteCard(\'' + c.id + '\')" title="Delete">✕</button>' +
+          '</div>' +
         '</div>' +
         '<div class="mobile-card-bottom">' +
           '<div class="mobile-card-price">Paid: SGD $' + cost.toFixed(2) + '<br>Value: ' + fmt(val) + '</div>' +
@@ -606,33 +752,76 @@ function updateSummary() {
   if (profitIcon) profitIcon.textContent = profit >= 0 ? '💰' : '📉';
 }
 
+// ── Price fetching (no URL required) ────────────────────────────────
+// Searches Pokemon TCG API directly by card name + set name
+// Falls back gracefully, supports alternate art / special sets
+
 async function fetchPrice(card) {
-  if (!card.url) return null;
-  const urlMatch = card.url.match(/\/([^\/]+)$/);
-  if (!urlMatch) return null;
-  const numberMatch = urlMatch[1].match(/-(\d+)$/);
-  const cardNumber = numberMatch ? numberMatch[1] : null;
-  const slug = urlMatch[1].replace(/-\d+$/, '').replace(/-/g, ' ');
-  const apiUrl = 'https://api.pokemontcg.io/v2/cards?q=name:%22' + encodeURIComponent(slug) + '%22&select=name,set,number,tcgplayer';
-  const res = await fetch(apiUrl);
-  if (!res.ok) return null;
-  const data = await res.json();
-  if (!data.data || data.data.length === 0) return null;
-  const match = data.data.find(c => cardNumber && c.number === cardNumber) || data.data[0];
-  const prices = match.tcgplayer ? match.tcgplayer.prices : null;
-  if (!prices) return null;
-  const base =
-    (prices.holofoil && prices.holofoil.market) ? prices.holofoil.market :
-    (prices.normal && prices.normal.market) ? prices.normal.market :
-    (prices.reverseHolofoil && prices.reverseHolofoil.market) ? prices.reverseHolofoil.market : null;
-  if (!base) return null;
-  const gradeStr = card.grade ? card.grade.toLowerCase() : 'raw';
-  let priceUSD = base;
-  if (gradeStr === 'psa 10' || gradeStr === 'bgs 10') priceUSD *= 3.5;
-  else if (gradeStr === 'psa 9' || gradeStr === 'bgs 9.5') priceUSD *= 1.5;
-  else if (gradeStr === 'psa 8' || gradeStr === 'bgs 9') priceUSD *= 1.2;
-  else if (gradeStr === 'psa 7') priceUSD *= 1.05;
-  return Math.round(priceUSD * USD_TO_SGD * 100) / 100;
+  try {
+    // Build search query from name + optional set
+    const namePart = card.name.replace(/['"]/g, '');
+    let query = `name:"${namePart}"`;
+    if (card.set) {
+      // Try to match set name loosely
+      const setSanitized = card.set.replace(/['"]/g, '');
+      query += ` set.name:"${setSanitized}"`;
+    }
+
+    const apiUrl = 'https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(query) + '&select=name,set,number,tcgplayer&orderBy=-set.releaseDate&pageSize=20';
+    const res = await fetch(apiUrl);
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    if (!data.data || data.data.length === 0) {
+      // Retry without set name if no results
+      if (card.set) {
+        const fallbackUrl = 'https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(`name:"${namePart}"`) + '&select=name,set,number,tcgplayer&orderBy=-set.releaseDate&pageSize=10';
+        const res2 = await fetch(fallbackUrl);
+        if (!res2.ok) return null;
+        const data2 = await res2.json();
+        if (!data2.data || data2.data.length === 0) return null;
+        return extractPriceFromResults(data2.data, card);
+      }
+      return null;
+    }
+
+    return extractPriceFromResults(data.data, card);
+  } catch (e) {
+    console.error('fetchPrice error for ' + card.name, e);
+    return null;
+  }
+}
+
+function extractPriceFromResults(results, card) {
+  // Find best match: prefer exact name match, then pick first with a price
+  const exactMatches = results.filter(r => r.name.toLowerCase() === card.name.toLowerCase());
+  const candidates = exactMatches.length > 0 ? exactMatches : results;
+
+  for (const match of candidates) {
+    const prices = match.tcgplayer ? match.tcgplayer.prices : null;
+    if (!prices) continue;
+
+    // Try various price types in order of preference
+    const base =
+      (prices.holofoil?.market) ? prices.holofoil.market :
+      (prices['1stEditionHolofoil']?.market) ? prices['1stEditionHolofoil'].market :
+      (prices.normal?.market) ? prices.normal.market :
+      (prices.reverseHolofoil?.market) ? prices.reverseHolofoil.market :
+      (prices.unlimited?.market) ? prices.unlimited.market :
+      (prices['1stEdition']?.market) ? prices['1stEdition'].market : null;
+
+    if (!base) continue;
+
+    const gradeStr = (card.grade || 'raw').toLowerCase();
+    let priceUSD = base;
+    if (gradeStr === 'psa 10' || gradeStr === 'bgs 10') priceUSD *= 3.5;
+    else if (gradeStr === 'psa 9' || gradeStr === 'bgs 9.5') priceUSD *= 1.5;
+    else if (gradeStr === 'psa 8' || gradeStr === 'bgs 9') priceUSD *= 1.2;
+    else if (gradeStr === 'psa 7') priceUSD *= 1.05;
+
+    return Math.round(priceUSD * USD_TO_SGD * 100) / 100;
+  }
+  return null;
 }
 
 function isSameDay(ts1, ts2) {
@@ -671,16 +860,16 @@ async function refreshPrices(silent) {
         updated++;
       }
     } catch (e) { console.error('Failed for ' + active[i].name, e); }
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 300));
   }
   localStorage.setItem('lastRefresh', Date.now().toString());
   render();
-  document.getElementById('last-updated').textContent = 'Last refreshed: ' + new Date().toLocaleString('en-SG');
+  document.getElementById('last-updated').textContent = 'Last refreshed: ' + new Date().toLocaleString('en-SG') + ' · USD/SGD: ' + USD_TO_SGD.toFixed(4);
   btn.disabled = false;
   btn.textContent = '↻ Refresh prices';
   if (!silent) {
     if (updated > 0) toast('Updated ' + updated + ' card' + (updated > 1 ? 's' : '') + '.', 'success');
-    else toast('No prices could be fetched. Check your PriceCharting URLs.', 'error');
+    else toast('No prices found. Try setting values manually.', 'error');
   }
 }
 
