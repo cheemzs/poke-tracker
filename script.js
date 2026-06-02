@@ -1,26 +1,32 @@
 /* ═══════════════════════════════════════════════════════════════════
-   POKEVAULT — script.js  v3.0
+   POKEVAULT — script.js  v4.0
    ═══════════════════════════════════════════════════════════════════ */
-
 'use strict';
 
 // ── State ─────────────────────────────────────────────────────────────────
-let USD_TO_SGD        = 1.35;
-let cards             = [];
-let priceChart        = null;
-let colorEnabled      = true;
-let activeTypeFilter  = '';
-let activeSetFilter   = '';
-let activeMoversFilter = '';
-let searchQuery       = '';
-let editingCardId     = null;
+let USD_TO_SGD          = 1.35;
+let cards               = [];
+let priceChart          = null;
+let colorEnabled        = true;
+let activeTypeFilter    = '';
+let activeSetFilter     = '';
+let activeMoversFilter  = '';
+let searchQuery         = '';
+let editingCardId       = null;
 let activeCollectionTab = 'active';
-let sortCol           = null;
-let sortDir           = 1;
+let sortCol             = null;
+let sortDir             = 1;
 
-// Cached card image state for the current modal
-let _currentCardImageUrl    = null;
-let _currentCardImageLoaded = false;
+// Target-alert deduplication — tracks card IDs already alerted this session
+const _alertedTargets = new Set();
+
+// Card image cache per modal open
+let _cardImageUrl    = null;
+let _cardImageLoaded = false;
+
+// ── Card-picker modal state ───────────────────────────────────────────────
+let _pickerResults  = [];
+let _pickerCallback = null;
 
 // ── Type colour map ───────────────────────────────────────────────────────
 const TYPE_COLORS = {
@@ -49,9 +55,11 @@ function toggleColors() {
 }
 
 // ── Theme ─────────────────────────────────────────────────────────────────
-const THEMES = ['dark', 'light', 'dark2', 'lucario'];
+// Only 3 themes: dark (was dark2 colours), light, lucario
+const THEMES = ['dark', 'light', 'lucario'];
 
 function setTheme(theme) {
+  if (!THEMES.includes(theme)) theme = 'dark';
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('pv-theme', theme);
   document.querySelectorAll('.theme-option').forEach(btn => {
@@ -60,13 +68,14 @@ function setTheme(theme) {
 }
 
 (function initTheme() {
-  const saved = localStorage.getItem('pv-theme') || 'dark';
+  let saved = localStorage.getItem('pv-theme') || 'dark';
+  // Migrate old 'dark2' → 'dark'
+  if (saved === 'dark2') saved = 'dark';
   setTheme(THEMES.includes(saved) ? saved : 'dark');
 })();
 
 window.addEventListener('scroll', () => {
-  const header = document.getElementById('site-header');
-  if (header) header.classList.toggle('scrolled', window.scrollY > 20);
+  document.getElementById('site-header')?.classList.toggle('scrolled', window.scrollY > 20);
 });
 
 // ── Exchange rate ─────────────────────────────────────────────────────────
@@ -109,11 +118,10 @@ async function loadCards() {
 }
 
 async function checkAutoRefresh() {
-  const active     = cards.filter(c => !c.sold);
-  if (active.length === 0) return;
-  const lastRefresh = localStorage.getItem('lastRefresh');
-  const oneDayAgo   = Date.now() - 24 * 60 * 60 * 1000;
-  if (!lastRefresh || parseInt(lastRefresh, 10) < oneDayAgo) {
+  if (!cards.filter(c => !c.sold).length) return;
+  const last      = localStorage.getItem('lastRefresh');
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  if (!last || parseInt(last, 10) < oneDayAgo) {
     toast('Auto-refreshing prices…', 'info');
     await refreshPrices(true);
   }
@@ -131,27 +139,22 @@ function fmt(val) {
 }
 
 function isSameDay(ts1, ts2) {
-  const d1 = new Date(ts1);
-  const d2 = new Date(ts2);
-  return d1.getFullYear() === d2.getFullYear() &&
-         d1.getMonth()    === d2.getMonth()    &&
-         d1.getDate()     === d2.getDate();
+  const a = new Date(ts1), b = new Date(ts2);
+  return a.getFullYear() === b.getFullYear() &&
+         a.getMonth()    === b.getMonth()    &&
+         a.getDate()     === b.getDate();
 }
 
 function animateValue(el, target, prefix) {
   const start    = parseFloat(el.getAttribute('data-val') || '0');
   const duration = 600;
-  const startTime = performance.now();
+  const t0       = performance.now();
   const step = now => {
-    const p    = Math.min((now - startTime) / duration, 1);
+    const p    = Math.min((now - t0) / duration, 1);
     const ease = 1 - Math.pow(1 - p, 3);
     el.textContent = prefix + '$' + (start + (target - start) * ease).toFixed(2);
-    if (p < 1) {
-      requestAnimationFrame(step);
-    } else {
-      el.textContent = prefix + '$' + target.toFixed(2);
-      el.setAttribute('data-val', target);
-    }
+    if (p < 1) requestAnimationFrame(step);
+    else { el.textContent = prefix + '$' + target.toFixed(2); el.setAttribute('data-val', target); }
   };
   requestAnimationFrame(step);
 }
@@ -226,10 +229,9 @@ async function addCard() {
   const targetPrice  = parseFloat(document.getElementById('f-target').value) || null;
   const notes        = document.getElementById('f-notes').value.trim();
 
-  if (!name)              { toast('Please enter a card name.', 'error'); return; }
+  if (!name)               { toast('Please enter a card name.', 'error'); return; }
   if (!price || price <= 0) { toast('Please enter a valid purchase price.', 'error'); return; }
 
-  // Build the display name: append variant if provided
   const displayName = variant ? `${name} (${variant})` : name;
 
   const res = await fetch('/api/cards', {
@@ -242,6 +244,7 @@ async function addCard() {
     }),
   });
   if (!res.ok) { toast('Failed to save card.', 'error'); return; }
+
   const card = await res.json();
   cards.push(card);
   render();
@@ -249,38 +252,38 @@ async function addCard() {
   toast(displayName + ' added to your vault.', 'success');
 
   // Reset form
-  ['f-name', 'f-set', 'f-variant', 'f-notes'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('f-price').value        = '';
-  document.getElementById('f-target').value       = '';
-  document.getElementById('f-quantity').value     = '1';
+  ['f-name','f-set','f-variant','f-notes'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('f-price').value         = '';
+  document.getElementById('f-target').value        = '';
+  document.getElementById('f-quantity').value      = '1';
   document.getElementById('f-purchase-date').value = '';
-  document.getElementById('f-type').value         = '';
-  document.getElementById('f-grade').value        = 'raw';
+  document.getElementById('f-type').value          = '';
+  document.getElementById('f-grade').value         = 'raw';
 }
 
 // ── Delete card ───────────────────────────────────────────────────────────
 async function deleteCard(id) {
-  const card      = cards.find(c => c.id === id);
-  const confirmed = await confirmDialog('Remove "' + (card ? card.name : 'this card') + '" from your vault?');
-  if (!confirmed) return;
+  const card = cards.find(c => c.id === id);
+  if (!await confirmDialog('Remove "' + (card?.name ?? 'this card') + '" from your vault?')) return;
   const res = await fetch('/api/cards/' + id, { method: 'DELETE' });
   if (!res.ok) { toast('Failed to delete card.', 'error'); return; }
   cards = cards.filter(c => c.id !== id);
+  _alertedTargets.delete(id);
   render();
   toast('Card removed.', 'info');
 }
 
 // ── Reset vault ───────────────────────────────────────────────────────────
 async function resetVault() {
-  const confirmed = await confirmDialog('Delete ALL cards from your vault? This cannot be undone.');
-  if (!confirmed) return;
+  if (!await confirmDialog('Delete ALL cards from your vault? This cannot be undone.')) return;
   let failed = 0;
   for (const card of [...cards]) {
     const res = await fetch('/api/cards/' + card.id, { method: 'DELETE' });
     if (!res.ok) failed++;
   }
-  if (failed > 0) toast(failed + ' card(s) could not be deleted.', 'error');
+  if (failed) toast(failed + ' card(s) could not be deleted.', 'error');
   cards = [];
+  _alertedTargets.clear();
   render();
   toast('Vault reset. All cards removed.', 'info');
 }
@@ -314,19 +317,19 @@ function closeEditModal() {
 }
 
 async function saveEdit() {
-  const id          = document.getElementById('edit-id').value;
-  const name        = document.getElementById('edit-name').value.trim();
-  const set         = document.getElementById('edit-set').value.trim();
-  const type        = document.getElementById('edit-type').value;
-  const grade       = document.getElementById('edit-grade').value;
-  const quantity    = parseInt(document.getElementById('edit-quantity').value, 10) || 1;
-  const price       = parseFloat(document.getElementById('edit-price').value);
+  const id           = document.getElementById('edit-id').value;
+  const name         = document.getElementById('edit-name').value.trim();
+  const set          = document.getElementById('edit-set').value.trim();
+  const type         = document.getElementById('edit-type').value;
+  const grade        = document.getElementById('edit-grade').value;
+  const quantity     = parseInt(document.getElementById('edit-quantity').value, 10) || 1;
+  const price        = parseFloat(document.getElementById('edit-price').value);
   const purchaseDate = document.getElementById('edit-purchase-date').value;
-  const targetPrice = parseFloat(document.getElementById('edit-target').value) || null;
-  const notes       = document.getElementById('edit-notes').value.trim();
-  const url         = document.getElementById('edit-url').value.trim();
+  const targetPrice  = parseFloat(document.getElementById('edit-target').value) || null;
+  const notes        = document.getElementById('edit-notes').value.trim();
+  const url          = document.getElementById('edit-url').value.trim();
 
-  if (!name)              { toast('Card name is required.', 'error'); return; }
+  if (!name)               { toast('Card name is required.', 'error'); return; }
   if (!price || price <= 0) { toast('Please enter a valid price.', 'error'); return; }
 
   const res = await fetch('/api/cards/' + id, {
@@ -335,9 +338,12 @@ async function saveEdit() {
     body: JSON.stringify({ name, set, type, grade, quantity, purchasePrice: price, purchaseDate, targetPrice, notes, url }),
   });
   if (!res.ok) { toast('Failed to save changes.', 'error'); return; }
+
   const idx = cards.findIndex(c => c.id === id);
   if (idx > -1) {
     cards[idx] = { ...cards[idx], name, set, type, grade, quantity, purchasePrice: price, purchaseDate, targetPrice, notes, url };
+    // Reset alert so editing a target price can re-trigger
+    _alertedTargets.delete(id);
   }
   closeEditModal();
   render();
@@ -366,12 +372,14 @@ async function confirmSell() {
   const soldDate  = document.getElementById('sell-date').value;
   const soldTo    = document.getElementById('sell-to').value.trim();
   if (!soldPrice || soldPrice <= 0) { toast('Please enter a valid sale price.', 'error'); return; }
+
   const res = await fetch('/api/cards/' + id, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sold: true, soldPrice, soldDate, soldTo }),
   });
   if (!res.ok) { toast('Failed to mark as sold.', 'error'); return; }
+
   const idx = cards.findIndex(c => c.id === id);
   if (idx > -1) cards[idx] = { ...cards[idx], sold: true, soldPrice, soldDate, soldTo };
   closeSellModal();
@@ -398,22 +406,23 @@ async function saveManualPrice() {
   const id  = document.getElementById('manual-price-id').value;
   const val = parseFloat(document.getElementById('manual-price-val').value);
   if (!val || val <= 0) { toast('Please enter a valid price.', 'error'); return; }
+
   const idx = cards.findIndex(c => c.id === id);
   if (idx < 0) return;
+
   const now     = Date.now();
   const history = [...(cards[idx].priceHistory || [])];
   const last    = history[history.length - 1];
-  if (!last || !isSameDay(last.date, now)) {
-    history.push({ date: now, value: val });
-  } else {
-    history[history.length - 1] = { date: now, value: val };
-  }
+  if (!last || !isSameDay(last.date, now)) history.push({ date: now, value: val });
+  else history[history.length - 1] = { date: now, value: val };
+
   const res = await fetch('/api/cards/' + id, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ currentValue: val, lastUpdated: now, priceHistory: history }),
   });
   if (!res.ok) { toast('Failed to save price.', 'error'); return; }
+
   cards[idx] = { ...cards[idx], currentValue: val, lastUpdated: now, priceHistory: history };
   closeManualPriceModal();
   render();
@@ -446,12 +455,12 @@ function getFilteredCards() {
   if (activeMoversFilter) {
     const priced = filtered.filter(c => c.currentValue != null);
     const sorted = [...priced].sort((a, b) => {
-      const aPct = (Number(a.currentValue) - Number(a.purchasePrice)) / Number(a.purchasePrice);
-      const bPct = (Number(b.currentValue) - Number(b.purchasePrice)) / Number(b.purchasePrice);
-      return bPct - aPct;
+      const ap = (Number(a.currentValue) - Number(a.purchasePrice)) / Number(a.purchasePrice);
+      const bp = (Number(b.currentValue) - Number(b.purchasePrice)) / Number(b.purchasePrice);
+      return bp - ap;
     });
-    if (activeMoversFilter === 'gainers') filtered = sorted.slice(0, 5);
-    else if (activeMoversFilter === 'losers') filtered = sorted.slice(-5).reverse();
+    if (activeMoversFilter === 'gainers')      filtered = sorted.slice(0, 5);
+    else if (activeMoversFilter === 'losers')  filtered = sorted.slice(-5).reverse();
   }
   return filtered;
 }
@@ -466,54 +475,56 @@ function sortBy(col) {
 function getSortedCards(list) {
   if (!sortCol) return list;
   return [...list].sort((a, b) => {
-    let aVal, bVal;
+    let av, bv;
     switch (sortCol) {
-      case 'name':          aVal = a.name.toLowerCase();            bVal = b.name.toLowerCase();            break;
-      case 'set':           aVal = (a.set || '').toLowerCase();     bVal = (b.set || '').toLowerCase();     break;
-      case 'purchasePrice': aVal = Number(a.purchasePrice);         bVal = Number(b.purchasePrice);         break;
-      case 'currentValue':  aVal = Number(a.currentValue  || 0);    bVal = Number(b.currentValue  || 0);    break;
+      case 'name':          av = a.name.toLowerCase();             bv = b.name.toLowerCase();            break;
+      case 'set':           av = (a.set||'').toLowerCase();        bv = (b.set||'').toLowerCase();        break;
+      case 'purchasePrice': av = Number(a.purchasePrice);          bv = Number(b.purchasePrice);          break;
+      case 'currentValue':  av = Number(a.currentValue  || 0);     bv = Number(b.currentValue  || 0);    break;
       case 'profit':
-        aVal = a.currentValue != null ? Number(a.currentValue) - Number(a.purchasePrice) : -Infinity;
-        bVal = b.currentValue != null ? Number(b.currentValue) - Number(b.purchasePrice) : -Infinity;
+        av = a.currentValue != null ? Number(a.currentValue) - Number(a.purchasePrice) : -Infinity;
+        bv = b.currentValue != null ? Number(b.currentValue) - Number(b.purchasePrice) : -Infinity;
         break;
-      case 'lastUpdated':   aVal = a.lastUpdated || 0;              bVal = b.lastUpdated || 0;              break;
+      case 'lastUpdated':   av = a.lastUpdated || 0;               bv = b.lastUpdated || 0;               break;
       default: return 0;
     }
-    if (aVal < bVal) return -1 * sortDir;
-    if (aVal > bVal) return  1 * sortDir;
-    return 0;
+    return av < bv ? -sortDir : av > bv ? sortDir : 0;
   });
 }
 
 // ── CSV Export ────────────────────────────────────────────────────────────
 function exportCSV() {
   const all = [...cards.filter(c => !c.sold), ...cards.filter(c => c.sold)];
-  if (all.length === 0) { toast('No cards to export.', 'info'); return; }
+  if (!all.length) { toast('No cards to export.', 'info'); return; }
 
-  const headers = ['Name','Set','Type','Grade','Quantity','Purchase Price (SGD)','Current Value (SGD)','P/L (SGD)','Purchase Date','Target Price','Notes','Status','Sold Price','Sold Date','Sold To'];
+  const headers = ['Name','Set','Type','Grade','Quantity','Purchase Price (SGD)','Current Value (SGD)',
+    'P/L (SGD)','Purchase Date','Target Price','Notes','Status','Sold Price','Sold Date','Sold To'];
   const rows = all.map(c => {
     const cost = Number(c.purchasePrice) * (c.quantity || 1);
     const val  = c.sold
       ? Number(c.soldPrice || 0) * (c.quantity || 1)
-      : (c.currentValue != null ? Number(c.currentValue) * (c.quantity || 1) : '');
-    const pl   = c.sold
+      : c.currentValue != null ? Number(c.currentValue) * (c.quantity || 1) : '';
+    const pl = c.sold
       ? ((Number(c.soldPrice || 0) - Number(c.purchasePrice)) * (c.quantity || 1)).toFixed(2)
-      : (c.currentValue != null ? ((Number(c.currentValue) - Number(c.purchasePrice)) * (c.quantity || 1)).toFixed(2) : '');
+      : c.currentValue != null ? ((Number(c.currentValue) - Number(c.purchasePrice)) * (c.quantity || 1)).toFixed(2) : '';
     return [
-      c.name, c.set || '', c.type || '', c.grade || '', c.quantity || 1,
+      c.name, c.set||'', c.type||'', c.grade||'', c.quantity||1,
       cost.toFixed(2), val !== '' ? Number(val).toFixed(2) : '', pl,
-      c.purchaseDate || '', c.targetPrice || '', c.notes || '',
+      c.purchaseDate||'', c.targetPrice||'', c.notes||'',
       c.sold ? 'Sold' : 'Active',
-      c.sold ? (c.soldPrice || '') : '',
-      c.sold ? (c.soldDate  || '') : '',
-      c.sold ? (c.soldTo    || '') : '',
+      c.sold ? (c.soldPrice||'') : '',
+      c.sold ? (c.soldDate||'')  : '',
+      c.sold ? (c.soldTo||'')    : '',
     ].map(v => '"' + String(v).replace(/"/g, '""') + '"');
   });
 
   const csv  = [headers.map(h => '"' + h + '"').join(','), ...rows.map(r => r.join(','))].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
-  const a    = Object.assign(document.createElement('a'), { href: url, download: 'pokevault-' + new Date().toISOString().split('T')[0] + '.csv' });
+  const a    = Object.assign(document.createElement('a'), {
+    href: url,
+    download: 'pokevault-' + new Date().toISOString().split('T')[0] + '.csv',
+  });
   a.click();
   URL.revokeObjectURL(url);
   toast('Collection exported.', 'success');
@@ -521,62 +532,54 @@ function exportCSV() {
 
 // ── TCG API helpers ───────────────────────────────────────────────────────
 /**
- * Build a sanitised query term for the Pokemon TCG API.
- * Handles apostrophes in names like "Misty's Psyduck" correctly,
- * and supports promo-variant lookups.
+ * Strip variant suffixes and characters that break the TCG API query syntax.
+ * Handles apostrophes in names like "Misty's Psyduck" — the API treats ' as
+ * a query operator, so we remove it rather than encode it.
  */
 function sanitiseName(name) {
-  // Remove everything after the first '(' so variant suffixes don't break the API query
+  // Remove parenthesised variant suffix first
   const base = name.replace(/\s*\(.*$/, '').trim();
-  // Escape apostrophes by removing them (the API uses them as query syntax)
-  return base.replace(/'/g, '').replace(/"/g, '').trim();
+  // Remove apostrophes / quotes (API query operators)
+  return base.replace(/['"]/g, '').trim();
 }
 
 function sanitiseSet(set) {
-  return (set || '').replace(/'/g, '').replace(/"/g, '').trim();
+  return (set || '').replace(/['"]/g, '').trim();
 }
 
-/**
- * Extract a variant hint from the stored card name.
- * e.g. "Charmander (Pokemon Center)" => "Pokemon Center"
- *      "Charmander (086/197)"         => "086/197"
- */
+/** Extract "(variant)" hint from stored name, e.g. "Charmander (Pokemon Center)" → "Pokemon Center" */
 function extractVariant(name) {
   const m = name.match(/\(([^)]+)\)/);
   return m ? m[1].trim() : null;
 }
 
 /**
- * Score a TCG API result against a stored card, taking into account
- * the set name, card number / variant, and promo hints.
+ * Score a TCG result against a stored card.
+ * Prioritises: exact name > set name > card number / promo variant match.
  */
 function scoreResult(result, card) {
-  const cardNameLower = sanitiseName(card.name).toLowerCase();
-  const cardSetLower  = sanitiseSet(card.set).toLowerCase();
-  const variant       = extractVariant(card.name);
-  const rSetLower     = (result.set?.name || '').toLowerCase();
-  const rNum          = (result.number   || '').toLowerCase();
+  const cardName  = sanitiseName(card.name).toLowerCase();
+  const cardSet   = sanitiseSet(card.set).toLowerCase();
+  const variant   = extractVariant(card.name);
+  const rSetLower = (result.set?.name || '').toLowerCase();
+  const rNum      = (result.number   || '').toLowerCase();
   let score = 0;
 
-  // Name match
-  if (result.name?.toLowerCase() === cardNameLower) score += 10;
-  else if (result.name?.toLowerCase().includes(cardNameLower)) score += 4;
+  if (result.name?.toLowerCase() === cardName)            score += 10;
+  else if (result.name?.toLowerCase().includes(cardName)) score +=  4;
 
-  // Set match
-  if (cardSetLower) {
-    if (rSetLower === cardSetLower)                                        score += 6;
-    else if (rSetLower.includes(cardSetLower) || cardSetLower.includes(rSetLower)) score += 3;
-    const firstWord = cardSetLower.split(' ')[0];
-    if (firstWord.length > 2 && rSetLower.includes(firstWord))            score += 1;
+  if (cardSet) {
+    if (rSetLower === cardSet)                                          score += 6;
+    else if (rSetLower.includes(cardSet) || cardSet.includes(rSetLower)) score += 3;
+    const firstWord = cardSet.split(' ')[0];
+    if (firstWord.length > 2 && rSetLower.includes(firstWord))         score += 1;
   }
 
-  // Variant / promo number match (e.g. "086/197" or "Pokemon Center")
   if (variant) {
-    const varLower = variant.toLowerCase();
-    if (rNum && rNum === varLower)                                         score += 8;
-    else if (rNum && rNum.includes(varLower))                             score += 4;
-    // Promo flavour text in set name (e.g. "Pokemon Center")
-    if (rSetLower.includes(varLower))                                     score += 5;
+    const varLow = variant.toLowerCase();
+    if (rNum && rNum === varLow)          score += 8;
+    else if (rNum && rNum.includes(varLow)) score += 4;
+    if (rSetLower.includes(varLow))       score += 5;
   }
 
   return score;
@@ -597,51 +600,97 @@ function extractPrice(prices) {
 
 function applyGradeMultiplier(baseUSD, grade) {
   const g = (grade || 'raw').toLowerCase();
-  if (g === 'psa 10' || g === 'bgs 10')   return baseUSD * 3.5;
-  if (g === 'psa 9'  || g === 'bgs 9.5')  return baseUSD * 1.5;
-  if (g === 'psa 8'  || g === 'bgs 9')    return baseUSD * 1.2;
-  if (g === 'psa 7')                       return baseUSD * 1.05;
+  if (g === 'psa 10' || g === 'bgs 10')  return baseUSD * 3.5;
+  if (g === 'psa 9'  || g === 'bgs 9.5') return baseUSD * 1.5;
+  if (g === 'psa 8'  || g === 'bgs 9')   return baseUSD * 1.2;
+  if (g === 'psa 7')                      return baseUSD * 1.05;
   return baseUSD;
 }
 
 /**
- * Query the Pokemon TCG API.
- * Tries three strategies in order:
- *   1. name + full set name (exact)
- *   2. name + first word of set name (wildcard)
- *   3. name only (broadest)
+ * Query the Pokemon TCG API with a three-tier fallback strategy.
+ * Returns an array of raw result objects.
  */
 async function queryTCG(namePart, setSanitized, fields = 'name,set,number,tcgplayer') {
-  const base = 'https://api.pokemontcg.io/v2/cards';
+  const base    = 'https://api.pokemontcg.io/v2/cards';
   const queries = [];
 
   if (setSanitized) {
     queries.push(`name:"${namePart}" set.name:"${setSanitized}"`);
     const firstWord = setSanitized.split(' ')[0];
-    if (firstWord.length > 2) {
-      queries.push(`name:"${namePart}" set.name:${firstWord}*`);
-    }
+    if (firstWord.length > 2) queries.push(`name:"${namePart}" set.name:${firstWord}*`);
   }
   queries.push(`name:"${namePart}"`);
 
   for (const q of queries) {
-    const url = `${base}?q=${encodeURIComponent(q)}&select=${fields}&orderBy=-set.releaseDate&pageSize=30`;
+    const url = `${base}?q=${encodeURIComponent(q)}&select=${fields}&orderBy=-set.releaseDate&pageSize=36`;
     try {
       const res  = await fetch(url);
       if (!res.ok) continue;
       const data = await res.json();
       if (data.data?.length) return data.data;
-    } catch { /* continue to next query */ }
+    } catch { /* try next */ }
   }
   return [];
+}
+
+// ── Card picker modal ─────────────────────────────────────────────────────
+/**
+ * Show a visual grid of candidate TCG cards.
+ * The user clicks the correct one; resolves with the chosen result object,
+ * or null if dismissed.
+ */
+function openCardPicker(results, card) {
+  return new Promise(resolve => {
+    _pickerResults  = results;
+    _pickerCallback = resolve;
+
+    const title = document.getElementById('picker-title');
+    title.textContent = 'Select the correct "' + sanitiseName(card.name) + '" card';
+
+    const grid = document.getElementById('picker-grid');
+    grid.innerHTML = '';
+
+    results.forEach((r, i) => {
+      const thumb = r.images?.small || r.images?.large || '';
+      const item  = document.createElement('div');
+      item.className = 'picker-item';
+      item.innerHTML =
+        '<div class="picker-img-wrap">' +
+          (thumb ? `<img src="${esc(thumb)}" alt="${esc(r.name)}" loading="lazy" />` : '<div class="picker-no-img">No image</div>') +
+        '</div>' +
+        `<div class="picker-info">` +
+          `<div class="picker-name">${esc(r.name)}</div>` +
+          `<div class="picker-set">${esc(r.set?.name || '—')}</div>` +
+          `<div class="picker-num">#${esc(r.number || '?')}</div>` +
+        `</div>`;
+      item.addEventListener('click', () => pickCard(i));
+      grid.appendChild(item);
+    });
+
+    document.getElementById('picker-overlay').classList.add('active');
+  });
+}
+
+function pickCard(index) {
+  document.getElementById('picker-overlay').classList.remove('active');
+  if (_pickerCallback) {
+    _pickerCallback(_pickerResults[index] || null);
+    _pickerCallback = null;
+  }
+}
+
+function closePickerModal() {
+  document.getElementById('picker-overlay').classList.remove('active');
+  if (_pickerCallback) { _pickerCallback(null); _pickerCallback = null; }
 }
 
 // ── Price fetching ────────────────────────────────────────────────────────
 async function fetchPrice(card) {
   try {
-    const namePart    = sanitiseName(card.name);
+    const namePart     = sanitiseName(card.name);
     const setSanitized = sanitiseSet(card.set);
-    const results     = await queryTCG(namePart, setSanitized, 'name,set,number,tcgplayer');
+    const results      = await queryTCG(namePart, setSanitized, 'name,set,number,tcgplayer');
     if (!results.length) return null;
 
     const scored = results
@@ -651,8 +700,7 @@ async function fetchPrice(card) {
     for (const match of scored) {
       const base = extractPrice(match.tcgplayer?.prices);
       if (base == null) continue;
-      const priceUSD = applyGradeMultiplier(base, card.grade);
-      return Math.round(priceUSD * USD_TO_SGD * 100) / 100;
+      return Math.round(applyGradeMultiplier(base, card.grade) * USD_TO_SGD * 100) / 100;
     }
     return null;
   } catch (e) {
@@ -663,11 +711,12 @@ async function fetchPrice(card) {
 
 async function refreshPrices(silent = false) {
   const active = cards.filter(c => !c.sold);
-  if (active.length === 0) { if (!silent) toast('No cards to refresh.', 'info'); return; }
-  const btn     = document.querySelector('.btn-refresh');
-  btn.disabled  = true;
+  if (!active.length) { if (!silent) toast('No cards to refresh.', 'info'); return; }
+
+  const btn       = document.querySelector('.btn-refresh');
+  btn.disabled    = true;
   btn.textContent = '↻ Fetching…';
-  let updated   = 0;
+  let updated     = 0;
 
   for (let i = 0; i < active.length; i++) {
     try {
@@ -702,31 +751,25 @@ async function refreshPrices(silent = false) {
   btn.disabled    = false;
   btn.textContent = '↻ Refresh prices';
   if (!silent) {
-    if (updated > 0) toast('Updated ' + updated + ' card' + (updated !== 1 ? 's' : '') + '.', 'success');
+    if (updated) toast('Updated ' + updated + ' card' + (updated !== 1 ? 's' : '') + '.', 'success');
     else toast('No prices found. Try setting values manually.', 'error');
   }
 }
 
 // ── Card image fetching ───────────────────────────────────────────────────
-async function fetchCardImage(card) {
+/**
+ * Fetch candidate images for a card.  Returns the TCG results array so the
+ * caller can show the picker when there are multiple matches, or auto-select
+ * when there is exactly one.
+ */
+async function fetchCardImageResults(card) {
   try {
     const namePart     = sanitiseName(card.name);
     const setSanitized = sanitiseSet(card.set);
-    const results      = await queryTCG(namePart, setSanitized, 'name,set,number,images');
-    if (!results.length) return null;
-
-    const scored = results
-      .map(r => ({ ...r, _score: scoreResult(r, card) }))
-      .sort((a, b) => b._score - a._score);
-
-    for (const match of scored) {
-      const img = match.images?.large || match.images?.small;
-      if (img) return img;
-    }
-    return null;
+    return await queryTCG(namePart, setSanitized, 'name,set,number,images');
   } catch (e) {
-    console.warn('fetchCardImage error:', e);
-    return null;
+    console.warn('fetchCardImageResults error:', e);
+    return [];
   }
 }
 
@@ -736,21 +779,21 @@ function switchModalTab(tab) {
   document.getElementById('modal-panel-image').style.display = tab === 'image' ? 'block' : 'none';
   document.getElementById('modal-tab-info').classList.toggle('active',  tab === 'info');
   document.getElementById('modal-tab-image').classList.toggle('active', tab === 'image');
-  if (tab === 'image') _showImageTab();
+  if (tab === 'image') _renderImageTab();
 }
 
-function _showImageTab() {
+function _renderImageTab() {
   const loadingEl  = document.getElementById('modal-image-loading');
   const foundEl    = document.getElementById('modal-image-found');
   const notFoundEl = document.getElementById('modal-image-notfound');
   const largeImg   = document.getElementById('modal-card-image-large');
 
-  if (_currentCardImageLoaded && _currentCardImageUrl) {
+  if (_cardImageLoaded && _cardImageUrl) {
     loadingEl.style.display  = 'none';
     foundEl.style.display    = 'block';
     notFoundEl.style.display = 'none';
-    if (largeImg.src !== _currentCardImageUrl) largeImg.src = _currentCardImageUrl;
-  } else if (_currentCardImageLoaded && !_currentCardImageUrl) {
+    if (largeImg.src !== _cardImageUrl) largeImg.src = _cardImageUrl;
+  } else if (_cardImageLoaded && !_cardImageUrl) {
     loadingEl.style.display  = 'none';
     foundEl.style.display    = 'none';
     notFoundEl.style.display = 'flex';
@@ -765,9 +808,9 @@ function _showImageTab() {
 async function openCard(id) {
   const card = cards.find(c => c.id === id);
   if (!card) return;
-  editingCardId = id;
-  _currentCardImageUrl    = null;
-  _currentCardImageLoaded = false;
+  editingCardId    = id;
+  _cardImageUrl    = null;
+  _cardImageLoaded = false;
 
   const cost   = Number(card.purchasePrice);
   const val    = card.currentValue != null ? Number(card.currentValue) : null;
@@ -822,97 +865,176 @@ async function openCard(id) {
   switchModalTab('info');
   document.getElementById('modal-overlay').classList.add('active');
 
-  // Fetch image asynchronously
-  fetchCardImage(card).then(imgUrl => {
-    _currentCardImageUrl    = imgUrl || null;
-    _currentCardImageLoaded = true;
+  // Fetch image candidates async — show picker if >1 result
+  fetchCardImageResults(card).then(async results => {
+    if (!results.length) {
+      _cardImageUrl    = null;
+      _cardImageLoaded = true;
+    } else {
+      const scored = results
+        .map(r => ({ ...r, _score: scoreResult(r, card) }))
+        .sort((a, b) => b._score - a._score);
+
+      // If top result has a much higher score than runner-up, auto-select it
+      const topScore    = scored[0]._score;
+      const runnerScore = scored[1]?._score ?? 0;
+      const autoSelect  = topScore > 0 && (topScore - runnerScore) >= 5;
+
+      let chosen = autoSelect ? scored[0] : null;
+
+      if (!chosen && scored.length === 1) {
+        chosen = scored[0];
+      } else if (!chosen) {
+        // Show picker — but only if the image tab is open or user explicitly requests
+        // We'll show picker when user clicks the image tab
+        // Store candidates for deferred picker
+        _cardImageLoaded = false; // still "loading" — picker will resolve it
+        _pendingImageResults = scored;
+        _pendingImageCard    = card;
+
+        const imagePanel = document.getElementById('modal-panel-image');
+        if (imagePanel?.style.display !== 'none') {
+          _showImagePicker(scored, card);
+        }
+        // Don't set loaded yet — wait for picker
+        return;
+      }
+
+      _cardImageUrl    = chosen?.images?.large || chosen?.images?.small || null;
+      _cardImageLoaded = true;
+    }
     const imagePanel = document.getElementById('modal-panel-image');
-    if (imagePanel?.style.display !== 'none') _showImageTab();
+    if (imagePanel?.style.display !== 'none') _renderImageTab();
   });
 
-  // Price history chart
+  // Price chart
+  _renderPriceChart(card, colors);
+}
+
+let _pendingImageResults = [];
+let _pendingImageCard    = null;
+
+async function _showImagePicker(results, card) {
+  const withImages = results.filter(r => r.images?.small || r.images?.large);
+  if (!withImages.length) {
+    _cardImageUrl    = null;
+    _cardImageLoaded = true;
+    _renderImageTab();
+    return;
+  }
+  // Show picker overlay
+  const chosen = await openCardPicker(withImages, card);
+  _cardImageUrl    = chosen ? (chosen.images?.large || chosen.images?.small || null) : null;
+  _cardImageLoaded = true;
+  _renderImageTab();
+}
+
+// Called when user switches to image tab — trigger picker if pending
+function switchModalTabWithPicker(tab) {
+  switchModalTab(tab);
+  if (tab === 'image' && !_cardImageLoaded && _pendingImageResults.length) {
+    _showImagePicker(_pendingImageResults, _pendingImageCard);
+  }
+}
+
+function _renderPriceChart(card, colors) {
   const history        = card.priceHistory || [];
   const emptyEl        = document.getElementById('modal-chart-empty');
   const chartContainer = document.querySelector('.modal-chart-container');
 
   if (history.length < 2) {
-    emptyEl.style.display       = 'block';
+    emptyEl.style.display        = 'block';
     chartContainer.style.display = 'none';
-  } else {
-    emptyEl.style.display       = 'none';
-    chartContainer.style.display = 'block';
-    const labels = history.map(p => new Date(p.date).toLocaleDateString('en-SG'));
-    const values = history.map(p => p.value);
-    if (priceChart) { priceChart.destroy(); priceChart = null; }
-    const ctx = document.getElementById('price-chart').getContext('2d');
-    priceChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Value (SGD)',
-          data: values,
-          borderColor: colors.chart,
-          backgroundColor: colors.bg,
-          borderWidth: 2,
-          pointRadius: 4,
-          pointBackgroundColor: colors.chart,
-          pointBorderColor: 'var(--bg2)',
-          pointBorderWidth: 2,
-          tension: 0.4,
-          fill: true,
-        }],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: 'var(--bg3)',
-            borderColor: 'var(--border2)',
-            borderWidth: 1,
-            titleColor: 'var(--text2)',
-            bodyColor: 'var(--text)',
-            callbacks: { label: ctx => 'SGD $' + Number(ctx.raw).toFixed(2) },
-          },
-        },
-        scales: {
-          y: { ticks: { callback: v => '$' + v, font: { size: 11, family: 'DM Mono' }, color: 'var(--text3)' }, grid: { color: 'var(--border)' }, border: { display: false } },
-          x: { ticks: { font: { size: 11, family: 'DM Mono' }, color: 'var(--text3)' }, grid: { display: false }, border: { display: false } },
-        },
-      },
-    });
+    return;
   }
+  emptyEl.style.display        = 'none';
+  chartContainer.style.display = 'block';
+
+  const labels = history.map(p => new Date(p.date).toLocaleDateString('en-SG'));
+  const values = history.map(p => p.value);
+  if (priceChart) { priceChart.destroy(); priceChart = null; }
+
+  const ctx = document.getElementById('price-chart').getContext('2d');
+  priceChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Value (SGD)',
+        data: values,
+        borderColor: colors.chart,
+        backgroundColor: colors.bg,
+        borderWidth: 2,
+        pointRadius: 4,
+        pointBackgroundColor: colors.chart,
+        pointBorderColor: 'var(--bg2)',
+        pointBorderWidth: 2,
+        tension: 0.4,
+        fill: true,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'var(--bg3)',
+          borderColor: 'var(--border2)',
+          borderWidth: 1,
+          titleColor: 'var(--text2)',
+          bodyColor: 'var(--text)',
+          callbacks: { label: ctx => 'SGD $' + Number(ctx.raw).toFixed(2) },
+        },
+      },
+      scales: {
+        y: {
+          ticks: { callback: v => '$' + v, font: { size: 11, family: 'DM Mono' }, color: 'var(--text3)' },
+          grid: { color: 'var(--border)' },
+          border: { display: false },
+        },
+        x: {
+          ticks: { font: { size: 11, family: 'DM Mono' }, color: 'var(--text3)' },
+          grid: { display: false },
+          border: { display: false },
+        },
+      },
+    },
+  });
 }
 
 function closeModal(e) {
   if (e && e.target !== document.getElementById('modal-overlay')) return;
+  _destroyModal();
+}
+
+function _destroyModal() {
   document.getElementById('modal-overlay').classList.remove('active');
   if (priceChart) { priceChart.destroy(); priceChart = null; }
-  _currentCardImageUrl    = null;
-  _currentCardImageLoaded = false;
+  _cardImageUrl        = null;
+  _cardImageLoaded     = false;
+  _pendingImageResults = [];
+  _pendingImageCard    = null;
 }
 
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  ['modal-overlay','confirm-overlay','edit-overlay','sell-overlay','manual-price-overlay'].forEach(id => {
-    document.getElementById(id)?.classList.remove('active');
-  });
+  ['modal-overlay','confirm-overlay','edit-overlay','sell-overlay','manual-price-overlay','picker-overlay']
+    .forEach(id => document.getElementById(id)?.classList.remove('active'));
   if (priceChart) { priceChart.destroy(); priceChart = null; }
 });
 
 // ── Movers ────────────────────────────────────────────────────────────────
 function renderMovers() {
-  const priced = cards.filter(c => !c.sold && c.currentValue != null);
+  const priced  = cards.filter(c => !c.sold && c.currentValue != null);
   const section = document.getElementById('movers-section');
   if (priced.length < 2) { section.style.display = 'none'; return; }
   section.style.display = 'block';
 
   const sorted = [...priced].sort((a, b) => {
-    const aPct = (Number(a.currentValue) - Number(a.purchasePrice)) / Number(a.purchasePrice);
-    const bPct = (Number(b.currentValue) - Number(b.purchasePrice)) / Number(b.purchasePrice);
-    return bPct - aPct;
+    const ap = (Number(a.currentValue) - Number(a.purchasePrice)) / Number(a.purchasePrice);
+    const bp = (Number(b.currentValue) - Number(b.purchasePrice)) / Number(b.purchasePrice);
+    return bp - ap;
   });
 
   const moverCard = c => {
@@ -920,22 +1042,29 @@ function renderMovers() {
     const pct    = (profit / Number(c.purchasePrice)) * 100;
     const pos    = profit >= 0;
     const colors = getTypeColor(c.type);
-    return '<div class="mover-card" style="border-left:3px solid ' + colors.border + ';" onclick="openCard(\'' + c.id + '\')">' +
-      '<div style="overflow:hidden;"><div class="mover-name">' + esc(c.name) + '</div><div class="mover-set">' + esc(c.set || '—') + '</div></div>' +
-      '<div class="mover-value ' + (pos ? 'profit-pos' : 'profit-neg') + '">' +
-        (pos ? '↑' : '↓') + ' ' + Math.abs(pct).toFixed(1) + '%' +
-        '<span class="mover-sgd">' + (pos ? '+' : '-') + 'SGD $' + Math.abs(profit).toFixed(2) + '</span>' +
-      '</div></div>';
+    return `<div class="mover-card" style="border-left:3px solid ${colors.border};" onclick="openCard('${c.id}')">` +
+      `<div style="overflow:hidden;"><div class="mover-name">${esc(c.name)}</div><div class="mover-set">${esc(c.set||'—')}</div></div>` +
+      `<div class="mover-value ${pos ? 'profit-pos' : 'profit-neg'}">${pos ? '↑' : '↓'} ${Math.abs(pct).toFixed(1)}%` +
+        `<span class="mover-sgd">${pos ? '+' : '-'}SGD $${Math.abs(profit).toFixed(2)}</span></div></div>`;
   };
 
   document.getElementById('movers-gainers').innerHTML = sorted.slice(0, 3).map(moverCard).join('');
   document.getElementById('movers-losers').innerHTML  = sorted.slice(-3).reverse().map(moverCard).join('');
 }
 
+/**
+ * Fire target-price alerts only once per card per page-load.
+ * Alerts are NOT reset by search / filter / tab changes.
+ */
 function checkTargetAlerts() {
   cards
-    .filter(c => !c.sold && c.targetPrice && c.currentValue != null && Number(c.currentValue) >= Number(c.targetPrice))
-    .forEach(c => toast('🎯 ' + c.name + ' hit your target of SGD $' + Number(c.targetPrice).toFixed(2) + '!', 'success'));
+    .filter(c => !c.sold && c.targetPrice && c.currentValue != null &&
+                 Number(c.currentValue) >= Number(c.targetPrice) &&
+                 !_alertedTargets.has(c.id))
+    .forEach(c => {
+      _alertedTargets.add(c.id);
+      toast('🎯 ' + c.name + ' hit your target of SGD $' + Number(c.targetPrice).toFixed(2) + '!', 'success');
+    });
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────
@@ -972,17 +1101,18 @@ function updateSummary() {
 // ── Render ────────────────────────────────────────────────────────────────
 function render() {
   populateSetFilter();
-  const tbody    = document.getElementById('card-table');
-  const cardList = document.getElementById('card-list');
-  const filtered = getFilteredCards();
-  const sorted   = getSortedCards(filtered);
+
+  const tbody     = document.getElementById('card-table');
+  const cardList  = document.getElementById('card-list');
+  const filtered  = getFilteredCards();
+  const sorted    = getSortedCards(filtered);
   const soldCards = cards.filter(c => c.sold);
 
   // ── Active cards ──
-  if (cards.filter(c => !c.sold).length === 0) {
+  if (!cards.filter(c => !c.sold).length) {
     tbody.innerHTML    = '<tr><td colspan="11"><div class="empty-state">Your vault is empty — add your first card to get started</div></td></tr>';
     cardList.innerHTML = '<div class="empty-state">Your vault is empty — add your first card to get started</div>';
-  } else if (sorted.length === 0) {
+  } else if (!sorted.length) {
     tbody.innerHTML    = '<tr><td colspan="11"><div class="empty-state">No cards match your filters</div></td></tr>';
     cardList.innerHTML = '<div class="empty-state">No cards match your filters</div>';
   } else {
@@ -996,22 +1126,22 @@ function render() {
       const updated     = c.lastUpdated ? new Date(c.lastUpdated).toLocaleDateString('en-SG') : '—';
       const colors      = getTypeColor(c.type);
       const typeBadge   = c.type
-        ? `<span class="type-badge" style="background:${colors.bg}; color:${colors.border}; border:1px solid ${colors.border};">${esc(c.type)}</span>`
+        ? `<span class="type-badge" style="background:${colors.bg};color:${colors.border};border:1px solid ${colors.border};">${esc(c.type)}</span>`
         : '<span class="type-badge type-unknown">—</span>';
-      const targetHit = c.targetPrice && c.currentValue != null && Number(c.currentValue) >= Number(c.targetPrice);
-      const rowStyle  = 'border-left:3px solid ' + colors.border + (targetHit ? '; box-shadow:inset 0 0 0 1px rgba(76,175,125,0.2);' : '') + ';';
+      const targetHit  = c.targetPrice && c.currentValue != null && Number(c.currentValue) >= Number(c.targetPrice);
+      const rowStyle   = `border-left:3px solid ${colors.border}${targetHit ? ';box-shadow:inset 0 0 0 1px rgba(76,175,125,0.2);' : ''};`;
       return `<tr class="card-row${targetHit ? ' target-hit' : ''}" onclick="openCard('${c.id}')" style="${rowStyle}">` +
         `<td title="${esc(c.name)}" style="font-weight:600;">${esc(c.name)}${targetHit ? ' <span style="color:var(--green);font-size:11px;">🎯</span>' : ''}</td>` +
-        `<td title="${esc(c.set || '—')}" style="color:var(--text2);">${esc(c.set || '—')}</td>` +
+        `<td title="${esc(c.set||'—')}" style="color:var(--text2);">${esc(c.set||'—')}</td>` +
         `<td>${typeBadge}</td>` +
         `<td><span class="badge ${gradeClass}">${esc(c.grade)}</span></td>` +
-        `<td style="font-family:var(--font-mono); color:var(--text2);">×${c.quantity || 1}</td>` +
+        `<td style="font-family:var(--font-mono);color:var(--text2);">×${c.quantity||1}</td>` +
         `<td style="font-family:var(--font-mono);">$${cost.toFixed(2)}</td>` +
-        `<td style="font-family:var(--font-mono);">${val != null ? '$' + val.toFixed(2) : '<span style="color:var(--text3);">—</span>'}</td>` +
-        `<td class="${profitClass}" style="font-family:var(--font-mono); font-weight:600;">${profitStr}</td>` +
-        `<td style="color:var(--text3); font-family:var(--font-mono); font-size:12px;">${updated}</td>` +
-        `<td><button class="btn-row-edit" onclick="event.stopPropagation(); openEditForm('${c.id}')" title="Edit">✎</button></td>` +
-        `<td><button class="del-btn" onclick="event.stopPropagation(); deleteCard('${c.id}')" title="Delete">✕</button></td>` +
+        `<td style="font-family:var(--font-mono);">${val != null ? '$'+val.toFixed(2) : '<span style="color:var(--text3);">—</span>'}</td>` +
+        `<td class="${profitClass}" style="font-family:var(--font-mono);font-weight:600;">${profitStr}</td>` +
+        `<td style="color:var(--text3);font-family:var(--font-mono);font-size:12px;">${updated}</td>` +
+        `<td><button class="btn-row-edit" onclick="event.stopPropagation();openEditForm('${c.id}')" title="Edit">✎</button></td>` +
+        `<td><button class="del-btn" onclick="event.stopPropagation();deleteCard('${c.id}')" title="Delete">✕</button></td>` +
         '</tr>';
     }).join('');
 
@@ -1027,10 +1157,10 @@ function render() {
       return `<div class="mobile-card${targetHit ? ' target-hit' : ''}" style="border-left:3px solid ${colors.border};" onclick="openCard('${c.id}')">` +
         '<div class="mobile-card-top">' +
           `<div><div class="mobile-card-name">${esc(c.name)}${targetHit ? ' 🎯' : ''}</div>` +
-          `<div class="mobile-card-set">${esc(c.set || '—')} · <span class="badge ${gradeClass}">${esc(c.grade)}</span>${c.quantity > 1 ? ' ×' + c.quantity : ''}</div></div>` +
+          `<div class="mobile-card-set">${esc(c.set||'—')} · <span class="badge ${gradeClass}">${esc(c.grade)}</span>${c.quantity>1?' ×'+c.quantity:''}</div></div>` +
           '<div style="display:flex;gap:8px;align-items:center;">' +
-            `<button class="mobile-card-delete" onclick="event.stopPropagation(); openEditForm('${c.id}')" title="Edit" style="font-size:14px;">✎</button>` +
-            `<button class="mobile-card-delete" onclick="event.stopPropagation(); deleteCard('${c.id}')" title="Delete">✕</button>` +
+            `<button class="mobile-card-delete" onclick="event.stopPropagation();openEditForm('${c.id}')" title="Edit" style="font-size:14px;">✎</button>` +
+            `<button class="mobile-card-delete" onclick="event.stopPropagation();deleteCard('${c.id}')" title="Delete">✕</button>` +
           '</div>' +
         '</div>' +
         '<div class="mobile-card-bottom">' +
@@ -1043,38 +1173,38 @@ function render() {
   // ── Sold cards ──
   const soldTbody = document.getElementById('sold-table');
   const soldList  = document.getElementById('sold-list');
-  if (soldCards.length === 0) {
+  if (!soldCards.length) {
     soldTbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">No sold cards yet</div></td></tr>';
     soldList.innerHTML  = '<div class="empty-state">No sold cards yet</div>';
   } else {
     soldTbody.innerHTML = soldCards.map(c => {
-      const profit      = c.soldPrice ? (Number(c.soldPrice) - Number(c.purchasePrice)) * (c.quantity || 1) : null;
+      const profit      = c.soldPrice ? (Number(c.soldPrice) - Number(c.purchasePrice)) * (c.quantity||1) : null;
       const profitStr   = profit != null ? (profit >= 0 ? '↑ +' : '↓ ') + 'SGD $' + Math.abs(profit).toFixed(2) : '—';
       const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
       return '<tr>' +
         `<td style="font-weight:600;">${esc(c.name)}</td>` +
-        `<td style="color:var(--text2);">${esc(c.set || '—')}</td>` +
-        `<td><span class="badge ${c.grade === 'raw' ? 'badge-raw' : 'badge-psa'}">${esc(c.grade)}</span></td>` +
-        `<td style="font-family:var(--font-mono);">$${(Number(c.purchasePrice) * (c.quantity || 1)).toFixed(2)}</td>` +
-        `<td style="font-family:var(--font-mono);">${c.soldPrice ? '$' + Number(c.soldPrice).toFixed(2) : '—'}</td>` +
-        `<td class="${profitClass}" style="font-family:var(--font-mono); font-weight:600;">${profitStr}</td>` +
-        `<td style="color:var(--text3); font-family:var(--font-mono); font-size:12px;">${c.soldDate || '—'}</td>` +
-        `<td style="color:var(--text2); font-size:12px;">${esc(c.soldTo || '—')}</td>` +
+        `<td style="color:var(--text2);">${esc(c.set||'—')}</td>` +
+        `<td><span class="badge ${c.grade==='raw'?'badge-raw':'badge-psa'}">${esc(c.grade)}</span></td>` +
+        `<td style="font-family:var(--font-mono);">$${(Number(c.purchasePrice)*(c.quantity||1)).toFixed(2)}</td>` +
+        `<td style="font-family:var(--font-mono);">${c.soldPrice?'$'+Number(c.soldPrice).toFixed(2):'—'}</td>` +
+        `<td class="${profitClass}" style="font-family:var(--font-mono);font-weight:600;">${profitStr}</td>` +
+        `<td style="color:var(--text3);font-family:var(--font-mono);font-size:12px;">${c.soldDate||'—'}</td>` +
+        `<td style="color:var(--text2);font-size:12px;">${esc(c.soldTo||'—')}</td>` +
         `<td><button class="del-btn" onclick="deleteCard('${c.id}')" title="Delete">✕</button></td>` +
         '</tr>';
     }).join('');
 
     soldList.innerHTML = soldCards.map(c => {
-      const profit      = c.soldPrice ? (Number(c.soldPrice) - Number(c.purchasePrice)) * (c.quantity || 1) : null;
+      const profit      = c.soldPrice ? (Number(c.soldPrice) - Number(c.purchasePrice)) * (c.quantity||1) : null;
       const profitStr   = profit != null ? (profit >= 0 ? '+' : '') + 'SGD $' + profit.toFixed(2) : '—';
       const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
       return '<div class="mobile-card">' +
         '<div class="mobile-card-top">' +
           `<div><div class="mobile-card-name">${esc(c.name)}</div>` +
-          `<div class="mobile-card-set">${esc(c.set || '—')} · sold ${c.soldDate || '—'}</div></div>` +
+          `<div class="mobile-card-set">${esc(c.set||'—')} · sold ${c.soldDate||'—'}</div></div>` +
         '</div>' +
         '<div class="mobile-card-bottom">' +
-          `<div class="mobile-card-price">Paid: SGD $${Number(c.purchasePrice).toFixed(2)}<br>Sold: ${c.soldPrice ? 'SGD $' + Number(c.soldPrice).toFixed(2) : '—'}</div>` +
+          `<div class="mobile-card-price">Paid: SGD $${Number(c.purchasePrice).toFixed(2)}<br>Sold: ${c.soldPrice?'SGD $'+Number(c.soldPrice).toFixed(2):'—'}</div>` +
           `<div class="mobile-card-profit ${profitClass}">${profitStr}</div>` +
         '</div></div>';
     }).join('');
