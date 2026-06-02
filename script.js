@@ -9,24 +9,28 @@ let searchQuery = '';
 let editingCardId = null;
 let activeCollectionTab = 'active';
 
+// cached card image url for the current modal
+let _currentCardImageUrl = null;
+let _currentCardImageLoaded = false;
+
 const TYPE_COLORS = {
-  'Fire':      { bg: 'rgba(255,100,50,0.12)', border: '#ff6432', chart: '#ff6432' },
-  'Water':     { bg: 'rgba(74,144,217,0.12)', border: '#4a90d9', chart: '#4a90d9' },
-  'Grass':     { bg: 'rgba(76,175,80,0.12)',  border: '#4caf50', chart: '#4caf50' },
-  'Electric':  { bg: 'rgba(255,200,0,0.12)',  border: '#ffc800', chart: '#ffc800' },
-  'Psychic':   { bg: 'rgba(220,80,160,0.12)', border: '#dc50a0', chart: '#dc50a0' },
-  'Fighting':  { bg: 'rgba(192,80,40,0.12)',  border: '#c05028', chart: '#c05028' },
-  'Dark':      { bg: 'rgba(80,60,120,0.12)',  border: '#503c78', chart: '#8060c0' },
-  'Steel':     { bg: 'rgba(120,140,160,0.12)',border: '#788ca0', chart: '#788ca0' },
-  'Dragon':    { bg: 'rgba(40,100,220,0.12)', border: '#2864dc', chart: '#2864dc' },
-  'Fairy':     { bg: 'rgba(240,100,180,0.12)',border: '#f064b4', chart: '#f064b4' },
-  'Normal':    { bg: 'rgba(160,160,120,0.12)',border: '#a0a078', chart: '#a0a078' },
-  'Colorless': { bg: 'rgba(180,180,180,0.08)',border: '#b4b4b4', chart: '#b4b4b4' },
+  'Fire':      { bg: 'rgba(255,100,50,0.12)',  border: '#ff6432', chart: '#ff6432' },
+  'Water':     { bg: 'rgba(74,144,217,0.12)',  border: '#4a90d9', chart: '#4a90d9' },
+  'Grass':     { bg: 'rgba(76,175,80,0.12)',   border: '#4caf50', chart: '#4caf50' },
+  'Electric':  { bg: 'rgba(255,200,0,0.12)',   border: '#ffc800', chart: '#ffc800' },
+  'Psychic':   { bg: 'rgba(220,80,160,0.12)',  border: '#dc50a0', chart: '#dc50a0' },
+  'Fighting':  { bg: 'rgba(192,80,40,0.12)',   border: '#c05028', chart: '#c05028' },
+  'Dark':      { bg: 'rgba(80,60,120,0.12)',   border: '#503c78', chart: '#8060c0' },
+  'Steel':     { bg: 'rgba(120,140,160,0.12)', border: '#788ca0', chart: '#788ca0' },
+  'Dragon':    { bg: 'rgba(40,100,220,0.12)',  border: '#2864dc', chart: '#2864dc' },
+  'Fairy':     { bg: 'rgba(240,100,180,0.12)', border: '#f064b4', chart: '#f064b4' },
+  'Normal':    { bg: 'rgba(160,160,120,0.12)', border: '#a0a078', chart: '#a0a078' },
+  'Colorless': { bg: 'rgba(180,180,180,0.08)', border: '#b4b4b4', chart: '#b4b4b4' },
 };
 
 function getTypeColor(type) {
-  if (!colorEnabled) return { bg: 'transparent', border: 'var(--border)', chart: '#c9a84c' };
-  return TYPE_COLORS[type] || { bg: 'transparent', border: 'var(--border)', chart: '#c9a84c' };
+  if (!colorEnabled) return { bg: 'transparent', border: 'var(--border)', chart: 'var(--accent)' };
+  return TYPE_COLORS[type] || { bg: 'transparent', border: 'var(--border)', chart: 'var(--accent)' };
 }
 
 function toggleColors() {
@@ -34,17 +38,26 @@ function toggleColors() {
   render();
 }
 
-function toggleTheme() {
-  const html = document.documentElement;
-  html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+// ── Theme ────────────────────────────────────────────────────────────
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('pv-theme', theme);
+  document.querySelectorAll('.theme-option').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-theme') === theme);
+  });
 }
+
+(function initTheme() {
+  const saved = localStorage.getItem('pv-theme') || 'dark';
+  setTheme(saved);
+})();
 
 window.addEventListener('scroll', () => {
   const header = document.getElementById('site-header');
   if (header) header.classList.toggle('scrolled', window.scrollY > 20);
 });
 
-// ── Live exchange rate ──────────────────────────────────────────────
+// ── Live exchange rate ────────────────────────────────────────────────
 async function fetchExchangeRate() {
   try {
     const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
@@ -60,7 +73,7 @@ async function fetchExchangeRate() {
   }
 }
 
-// ── Init ────────────────────────────────────────────────────────────
+// ── Init ─────────────────────────────────────────────────────────────
 async function init() {
   const res = await fetch('/api/me');
   if (!res.ok) { window.location.href = '/login.html'; return; }
@@ -132,8 +145,8 @@ function confirmDialog(message) {
       cancel.removeEventListener('click', onCancel);
       resolve(result);
     }
-    function onOk() { cleanup(true); }
-    function onCancel() { cleanup(false); }
+    const onOk = () => cleanup(true);
+    const onCancel = () => cleanup(false);
     ok.addEventListener('click', onOk);
     cancel.addEventListener('click', onCancel);
   });
@@ -153,15 +166,16 @@ function toggleForm() {
   if (f.classList.contains('open')) document.getElementById('f-name').focus();
 }
 
-// ── Set filter ──────────────────────────────────────────────────────
+// ── Set filter ────────────────────────────────────────────────────────
 function populateSetFilter() {
   const sets = [...new Set(cards.filter(c => !c.sold && c.set).map(c => c.set))].sort();
   const sel = document.getElementById('filter-set');
   const current = sel.value;
-  sel.innerHTML = '<option value="">All sets</option>' + sets.map(s => `<option value="${esc(s)}"${s === current ? ' selected' : ''}>${esc(s)}</option>`).join('');
+  sel.innerHTML = '<option value="">All sets</option>' +
+    sets.map(s => `<option value="${esc(s)}"${s === current ? ' selected' : ''}>${esc(s)}</option>`).join('');
 }
 
-// ── Add card ────────────────────────────────────────────────────────
+// ── Add card ──────────────────────────────────────────────────────────
 async function addCard() {
   const name = document.getElementById('f-name').value.trim();
   const set = document.getElementById('f-set').value.trim();
@@ -195,7 +209,7 @@ async function addCard() {
   document.getElementById('f-grade').value = 'raw';
 }
 
-// ── Delete card ─────────────────────────────────────────────────────
+// ── Delete card ───────────────────────────────────────────────────────
 async function deleteCard(id) {
   const card = cards.find(c => c.id === id);
   const confirmed = await confirmDialog('Remove "' + (card ? card.name : 'this card') + '" from your vault?');
@@ -207,7 +221,7 @@ async function deleteCard(id) {
   toast('Card removed.', 'info');
 }
 
-// ── Reset vault ─────────────────────────────────────────────────────
+// ── Reset vault ───────────────────────────────────────────────────────
 async function resetVault() {
   const confirmed = await confirmDialog('Delete ALL cards from your vault? This cannot be undone.');
   if (!confirmed) return;
@@ -223,7 +237,7 @@ async function resetVault() {
   toast('Vault reset. All cards removed.', 'info');
 }
 
-// ── Edit modal ──────────────────────────────────────────────────────
+// ── Edit modal ────────────────────────────────────────────────────────
 function openEditForm(idOverride) {
   const targetId = idOverride || editingCardId;
   if (!targetId) return;
@@ -276,7 +290,7 @@ async function saveEdit() {
   toast('Card updated.', 'success');
 }
 
-// ── Sell modal ──────────────────────────────────────────────────────
+// ── Sell modal ────────────────────────────────────────────────────────
 function openSellForm() {
   const card = cards.find(c => c.id === editingCardId);
   if (!card) return;
@@ -311,7 +325,7 @@ async function confirmSell() {
   toast('Card marked as sold.', 'success');
 }
 
-// ── Manual price override ───────────────────────────────────────────
+// ── Manual price override ─────────────────────────────────────────────
 function openManualPrice() {
   const card = cards.find(c => c.id === editingCardId);
   if (!card) return;
@@ -354,7 +368,7 @@ async function saveManualPrice() {
   toast('Price updated manually.', 'success');
 }
 
-// ── Filters ─────────────────────────────────────────────────────────
+// ── Filters ───────────────────────────────────────────────────────────
 function applyFilter() {
   activeTypeFilter = document.getElementById('filter-type').value;
   activeSetFilter = document.getElementById('filter-set').value;
@@ -388,7 +402,7 @@ function getFilteredCards() {
   return filtered;
 }
 
-// ── CSV Export ───────────────────────────────────────────────────────
+// ── CSV Export ────────────────────────────────────────────────────────
 function exportCSV() {
   const active = cards.filter(c => !c.sold);
   const sold = cards.filter(c => c.sold);
@@ -406,8 +420,8 @@ function exportCSV() {
       : (c.currentValue != null ? ((Number(c.currentValue) - Number(c.purchasePrice)) * (c.quantity || 1)).toFixed(2) : '');
     return [
       c.name, c.set || '', c.type || '', c.grade || '', c.quantity || 1,
-      cost.toFixed(2), val !== '' ? Number(val).toFixed(2) : '',
-      pl, c.purchaseDate || '', c.targetPrice || '', c.notes || '',
+      cost.toFixed(2), val !== '' ? Number(val).toFixed(2) : '', pl,
+      c.purchaseDate || '', c.targetPrice || '', c.notes || '',
       c.sold ? 'Sold' : 'Active',
       c.sold ? (c.soldPrice || '') : '',
       c.sold ? (c.soldDate || '') : '',
@@ -426,12 +440,11 @@ function exportCSV() {
   toast('Collection exported.', 'success');
 }
 
-// ── Card image fetching ──────────────────────────────────────────────
+// ── Card image fetching ───────────────────────────────────────────────
 async function fetchCardImage(card) {
   try {
     const namePart = card.name.replace(/['"]/g, '').trim();
 
-    // Stage 1: exact name + set
     if (card.set) {
       const setSanitized = card.set.replace(/['"]/g, '').trim();
       const q1 = `name:"${namePart}" set.name:"${setSanitized}"`;
@@ -444,7 +457,6 @@ async function fetchCardImage(card) {
       }
     }
 
-    // Stage 2: name only
     const q2 = `name:"${namePart}"`;
     const url2 = 'https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(q2) + '&select=name,set,images&orderBy=-set.releaseDate&pageSize=10';
     const res2 = await fetch(url2);
@@ -478,11 +490,50 @@ function extractImageFromResults(results, card) {
   return null;
 }
 
-// ── Card detail modal ────────────────────────────────────────────────
+// ── Modal tab switcher ────────────────────────────────────────────────
+function switchModalTab(tab) {
+  document.getElementById('modal-panel-info').style.display = tab === 'info' ? 'block' : 'none';
+  document.getElementById('modal-panel-image').style.display = tab === 'image' ? 'block' : 'none';
+  document.getElementById('modal-tab-info').classList.toggle('active', tab === 'info');
+  document.getElementById('modal-tab-image').classList.toggle('active', tab === 'image');
+
+  if (tab === 'image') {
+    _showImageTab();
+  }
+}
+
+function _showImageTab() {
+  const loadingEl = document.getElementById('modal-image-loading');
+  const foundEl = document.getElementById('modal-image-found');
+  const notFoundEl = document.getElementById('modal-image-notfound');
+  const largeImg = document.getElementById('modal-card-image-large');
+
+  if (_currentCardImageLoaded && _currentCardImageUrl) {
+    loadingEl.style.display = 'none';
+    foundEl.style.display = 'block';
+    notFoundEl.style.display = 'none';
+    if (largeImg.src !== _currentCardImageUrl) largeImg.src = _currentCardImageUrl;
+  } else if (_currentCardImageLoaded && !_currentCardImageUrl) {
+    loadingEl.style.display = 'none';
+    foundEl.style.display = 'none';
+    notFoundEl.style.display = 'flex';
+  } else {
+    loadingEl.style.display = 'flex';
+    foundEl.style.display = 'none';
+    notFoundEl.style.display = 'none';
+  }
+}
+
+// ── Card detail modal ─────────────────────────────────────────────────
 async function openCard(id) {
   const card = cards.find(c => c.id === id);
   if (!card) return;
   editingCardId = id;
+
+  // Reset image state
+  _currentCardImageUrl = null;
+  _currentCardImageLoaded = false;
+
   const cost = Number(card.purchasePrice);
   const val = card.currentValue != null ? Number(card.currentValue) : null;
   const profit = val != null ? (val - cost) * (card.quantity || 1) : null;
@@ -493,9 +544,11 @@ async function openCard(id) {
 
   document.getElementById('modal-name').textContent = card.name + (card.quantity > 1 ? ' ×' + card.quantity : '');
   document.getElementById('modal-meta').textContent = (card.set || 'Unknown set') + (card.type ? ' · ' + card.type : '');
+
   const gradeEl = document.getElementById('modal-grade');
   gradeEl.textContent = card.grade;
   gradeEl.className = 'badge ' + (card.grade === 'raw' ? 'badge-raw' : 'badge-psa');
+
   document.getElementById('modal-cost').textContent = 'SGD $' + (cost * (card.quantity || 1)).toFixed(2);
   document.getElementById('modal-value').textContent = val != null ? 'SGD $' + (val * (card.quantity || 1)).toFixed(2) : '—';
 
@@ -516,43 +569,59 @@ async function openCard(id) {
   if (card.targetPrice) {
     const hit = val != null && val >= card.targetPrice;
     targetEl.textContent = 'SGD $' + Number(card.targetPrice).toFixed(2) + (hit ? ' ✓ Target reached!' : '');
-    targetEl.style.color = hit ? 'var(--green)' : 'var(--text)';
+    targetEl.style.color = hit ? 'var(--green)' : '';
   } else {
     targetEl.textContent = '—';
     targetEl.style.color = '';
   }
 
   const notesWrap = document.getElementById('modal-notes-wrap');
-  const notesEl = document.getElementById('modal-notes');
   if (card.notes) {
     notesWrap.style.display = 'block';
-    notesEl.textContent = card.notes;
+    document.getElementById('modal-notes').textContent = card.notes;
   } else {
     notesWrap.style.display = 'none';
   }
 
-  // ── Card image ──
-  const imgWrap = document.getElementById('modal-card-image-wrap');
-  const imgEl = document.getElementById('modal-card-image');
-  imgWrap.style.display = 'none';
-  imgEl.src = '';
-  imgEl.classList.remove('loaded');
+  // Reset to info tab
+  switchModalTab('info');
 
+  // Small thumbnail in info tab
+  const smallWrap = document.getElementById('modal-card-image-wrap-small');
+  const smallImg = document.getElementById('modal-card-image-small');
+  smallWrap.style.display = 'none';
+  smallImg.src = '';
+  smallImg.classList.remove('loaded');
+
+  // Set caption
+  document.getElementById('modal-image-caption').textContent = card.name + (card.set ? ' — ' + card.set : '');
+
+  // Open modal
   document.getElementById('modal-overlay').classList.add('active');
 
-  // Fetch image async (non-blocking, shows after modal opens)
+  // Fetch image async (non-blocking)
   fetchCardImage(card).then(imgUrl => {
+    _currentCardImageUrl = imgUrl || null;
+    _currentCardImageLoaded = true;
+
+    // Show thumbnail in info tab
     if (imgUrl) {
-      imgEl.onload = () => {
-        imgEl.classList.add('loaded');
-        imgWrap.style.display = 'flex';
+      smallImg.onload = () => {
+        smallImg.classList.add('loaded');
+        smallWrap.style.display = 'flex';
       };
-      imgEl.onerror = () => { imgWrap.style.display = 'none'; };
-      imgEl.src = imgUrl;
+      smallImg.onerror = () => { smallWrap.style.display = 'none'; };
+      smallImg.src = imgUrl;
+    }
+
+    // If image tab is open, update it
+    const imagePanel = document.getElementById('modal-panel-image');
+    if (imagePanel && imagePanel.style.display !== 'none') {
+      _showImageTab();
     }
   });
 
-  // ── Price chart ──
+  // Price chart
   const history = card.priceHistory || [];
   const emptyEl = document.getElementById('modal-chart-empty');
   const chartContainer = document.querySelector('.modal-chart-container');
@@ -611,6 +680,8 @@ function closeModal(e) {
   if (e && e.target !== document.getElementById('modal-overlay')) return;
   document.getElementById('modal-overlay').classList.remove('active');
   if (priceChart) { priceChart.destroy(); priceChart = null; }
+  _currentCardImageUrl = null;
+  _currentCardImageLoaded = false;
 }
 
 document.addEventListener('keydown', e => {
@@ -624,6 +695,7 @@ document.addEventListener('keydown', e => {
 
 function fmt(val) { return val != null ? 'SGD $' + Number(val).toFixed(2) : '—'; }
 
+// ── Sort ──────────────────────────────────────────────────────────────
 let sortCol = null;
 let sortDir = 1;
 
@@ -636,21 +708,22 @@ function getSortedCards(list) {
   if (!sortCol) return list;
   return [...list].sort((a, b) => {
     let aVal, bVal;
-    if (sortCol === 'name') { aVal = a.name.toLowerCase(); bVal = b.name.toLowerCase(); }
-    else if (sortCol === 'set') { aVal = (a.set || '').toLowerCase(); bVal = (b.set || '').toLowerCase(); }
-    else if (sortCol === 'purchasePrice') { aVal = Number(a.purchasePrice); bVal = Number(b.purchasePrice); }
-    else if (sortCol === 'currentValue') { aVal = Number(a.currentValue || 0); bVal = Number(b.currentValue || 0); }
+    if (sortCol === 'name')          { aVal = a.name.toLowerCase();            bVal = b.name.toLowerCase(); }
+    else if (sortCol === 'set')      { aVal = (a.set || '').toLowerCase();      bVal = (b.set || '').toLowerCase(); }
+    else if (sortCol === 'purchasePrice') { aVal = Number(a.purchasePrice);     bVal = Number(b.purchasePrice); }
+    else if (sortCol === 'currentValue') { aVal = Number(a.currentValue || 0);  bVal = Number(b.currentValue || 0); }
     else if (sortCol === 'profit') {
       aVal = a.currentValue != null ? Number(a.currentValue) - Number(a.purchasePrice) : -Infinity;
       bVal = b.currentValue != null ? Number(b.currentValue) - Number(b.purchasePrice) : -Infinity;
     }
     else if (sortCol === 'lastUpdated') { aVal = a.lastUpdated || 0; bVal = b.lastUpdated || 0; }
     if (aVal < bVal) return -1 * sortDir;
-    if (aVal > bVal) return 1 * sortDir;
+    if (aVal > bVal) return  1 * sortDir;
     return 0;
   });
 }
 
+// ── Movers ────────────────────────────────────────────────────────────
 function renderMovers() {
   const priced = cards.filter(c => !c.sold && c.currentValue != null);
   if (priced.length < 2) { document.getElementById('movers-section').style.display = 'none'; return; }
@@ -662,6 +735,7 @@ function renderMovers() {
   });
   const top = sorted.slice(0, 3);
   const bottom = sorted.slice(-3).reverse();
+
   function moverCard(c) {
     const profit = Number(c.currentValue) - Number(c.purchasePrice);
     const pct = (profit / Number(c.purchasePrice)) * 100;
@@ -674,18 +748,19 @@ function renderMovers() {
         '<span class="mover-sgd">' + (pos ? '+' : '-') + 'SGD $' + Math.abs(profit).toFixed(2) + '</span>' +
       '</div></div>';
   }
+
   document.getElementById('movers-gainers').innerHTML = top.map(moverCard).join('');
   document.getElementById('movers-losers').innerHTML = bottom.map(moverCard).join('');
 }
 
 function checkTargetAlerts() {
   const active = cards.filter(c => !c.sold && c.targetPrice && c.currentValue != null);
-  const hits = active.filter(c => Number(c.currentValue) >= Number(c.targetPrice));
-  hits.forEach(c => {
+  active.filter(c => Number(c.currentValue) >= Number(c.targetPrice)).forEach(c => {
     toast('🎯 ' + c.name + ' hit your target of SGD $' + Number(c.targetPrice).toFixed(2) + '!', 'success');
   });
 }
 
+// ── Render ────────────────────────────────────────────────────────────
 function render() {
   populateSetFilter();
   const tbody = document.getElementById('card-table');
@@ -714,7 +789,7 @@ function render() {
         ? '<span class="type-badge" style="background:' + colors.bg + '; color:' + colors.border + '; border: 1px solid ' + colors.border + ';">' + esc(c.type) + '</span>'
         : '<span class="type-badge type-unknown">—</span>';
       const targetHit = c.targetPrice && c.currentValue != null && Number(c.currentValue) >= Number(c.targetPrice);
-      const rowStyle = 'border-left: 3px solid ' + colors.border + (targetHit ? '; box-shadow: inset 0 0 0 1px rgba(76,175,125,0.3);' : '') + ';';
+      const rowStyle = 'border-left: 3px solid ' + colors.border + (targetHit ? '; box-shadow: inset 0 0 0 1px rgba(76,175,125,0.2);' : '') + ';';
       return '<tr class="card-row' + (targetHit ? ' target-hit' : '') + '" onclick="openCard(\'' + c.id + '\')" style="' + rowStyle + '">' +
         '<td title="' + esc(c.name) + '" style="font-weight:600;">' + esc(c.name) + (targetHit ? ' <span style="color:var(--green); font-size:11px;">🎯</span>' : '') + '</td>' +
         '<td title="' + esc(c.set || '—') + '" style="color:var(--text2);">' + esc(c.set || '—') + '</td>' +
@@ -801,7 +876,7 @@ function render() {
 }
 
 function esc(str) {
-  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function updateSummary() {
@@ -832,7 +907,7 @@ function updateSummary() {
   if (profitIcon) profitIcon.textContent = profit >= 0 ? '💰' : '📉';
 }
 
-// ── Price fetching ───────────────────────────────────────────────────
+// ── Price fetching ────────────────────────────────────────────────────
 async function fetchPrice(card) {
   try {
     const namePart = card.name.replace(/['"]/g, '').trim();
@@ -881,7 +956,6 @@ async function fetchPrice(card) {
 
 function extractPriceFromResults(results, card) {
   const cardSetLower = (card.set || '').toLowerCase();
-
   const scored = results.map(r => {
     let score = 0;
     if (r.name.toLowerCase() === card.name.toLowerCase()) score += 10;
@@ -913,10 +987,10 @@ function extractPriceFromResults(results, card) {
 
     const gradeStr = (card.grade || 'raw').toLowerCase();
     let priceUSD = base;
-    if (gradeStr === 'psa 10' || gradeStr === 'bgs 10') priceUSD *= 3.5;
+    if (gradeStr === 'psa 10' || gradeStr === 'bgs 10')   priceUSD *= 3.5;
     else if (gradeStr === 'psa 9' || gradeStr === 'bgs 9.5') priceUSD *= 1.5;
-    else if (gradeStr === 'psa 8' || gradeStr === 'bgs 9') priceUSD *= 1.2;
-    else if (gradeStr === 'psa 7') priceUSD *= 1.05;
+    else if (gradeStr === 'psa 8' || gradeStr === 'bgs 9')   priceUSD *= 1.2;
+    else if (gradeStr === 'psa 7')                           priceUSD *= 1.05;
 
     return Math.round(priceUSD * USD_TO_SGD * 100) / 100;
   }
