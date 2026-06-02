@@ -5,17 +5,15 @@ const session = require('express-session');
 const bcrypt  = require('bcryptjs');
 const { createClient } = require('@supabase/supabase-js');
 
-// ── Supabase ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://kilkeuaeusfqsobhxlou.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpbGtldWFldXNmcXNvYmh4bG91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMjYyNjEsImV4cCI6MjA5NTYwMjI2MX0.Gph5uSVo45L7__58vRZz-KaVrs8o6RSdnQusY2csJTw';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ── App ───────────────────────────────────────────────────────────────────
 const app = express();
 
 app.use(express.json());
 app.use(session({
-  secret: 'pokevault-secret-key-v4',
+  secret: 'pokevault-secret-key-v5',
   resave: false,
   saveUninitialized: false,
   cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 },
@@ -27,7 +25,7 @@ function requireAuth(req, res, next) {
   next();
 }
 
-// ── DB ↔ Client shape ─────────────────────────────────────────────────────
+// ── Shape converters ─────────────────────────────────────────────────────
 function toClient(c) {
   return {
     id:            c.id,
@@ -35,7 +33,7 @@ function toClient(c) {
     set:           c.set_name,
     type:          c.type,
     grade:         c.grade,
-    quantity:      c.quantity      ?? 1,
+    quantity:      c.quantity       ?? 1,
     purchasePrice: c.purchase_price,
     purchaseDate:  c.purchase_date,
     targetPrice:   c.target_price,
@@ -48,6 +46,8 @@ function toClient(c) {
     soldPrice:     c.sold_price,
     soldDate:      c.sold_date,
     soldTo:        c.sold_to,
+    imageUrl:      c.image_url      ?? null,
+    tcgId:         c.tcg_id         ?? null,
   };
 }
 
@@ -110,7 +110,7 @@ app.post('/api/cards', requireAuth, async (req, res) => {
   const {
     name, set, type, grade, quantity, purchasePrice,
     purchaseDate, targetPrice, notes, currentValue,
-    lastUpdated, url, priceHistory,
+    lastUpdated, url, priceHistory, imageUrl, tcgId,
   } = req.body;
   const id     = Date.now().toString();
   const record = {
@@ -130,13 +130,15 @@ app.post('/api/cards', requireAuth, async (req, res) => {
     url,
     price_history:  priceHistory ?? [],
     sold:           false,
+    image_url:      imageUrl ?? null,
+    tcg_id:         tcgId    ?? null,
   };
   const { error } = await supabase.from('cards').insert([record]);
   if (error) return res.status(500).json({ error: 'Failed to save card' });
   res.json(toClient({ ...record, sold: false }));
 });
 
-// Price / history update
+// Full price/history update
 app.put('/api/cards/:id', requireAuth, async (req, res) => {
   const { currentValue, lastUpdated, priceHistory } = req.body;
   const { error } = await supabase.from('cards')
@@ -146,13 +148,14 @@ app.put('/api/cards/:id', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// Partial update (edit / sell)
+// Partial update (edit / sell / image)
 app.patch('/api/cards/:id', requireAuth, async (req, res) => {
   const fieldMap = {
     name: 'name', set: 'set_name', type: 'type', grade: 'grade',
     quantity: 'quantity', purchasePrice: 'purchase_price', purchaseDate: 'purchase_date',
     targetPrice: 'target_price', notes: 'notes', url: 'url',
     sold: 'sold', soldPrice: 'sold_price', soldDate: 'sold_date', soldTo: 'sold_to',
+    imageUrl: 'image_url', tcgId: 'tcg_id',
   };
   const update = {};
   for (const [k, v] of Object.entries(fieldMap)) {
@@ -176,4 +179,4 @@ app.delete('/api/cards/:id', requireAuth, async (req, res) => {
 
 // ── Static ────────────────────────────────────────────────────────────────
 app.use(express.static('.'));
-app.listen(5000, () => console.log('PokeVault v4 running on :5000'));
+app.listen(5000, () => console.log('PokeVault v5 running on :5000'));
