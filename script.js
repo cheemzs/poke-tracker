@@ -1,5 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════
-   POKEVAULT — script.js  v4.0
+   POKEVAULT — script.js  v5.0
+   Key changes from v4:
+   - Card picker shown BEFORE adding a card (not just for image lookup)
+   - Robust multi-word & apostrophe name search (Misty's Psyduck, etc.)
+   - Promo card support via wildcard number search
+   - Lucario theme removed (dark + light only)
+   - Stored imageUrl + tcgId on each card record
    ═══════════════════════════════════════════════════════════════════ */
 'use strict';
 
@@ -17,16 +23,24 @@ let activeCollectionTab = 'active';
 let sortCol             = null;
 let sortDir             = 1;
 
-// Target-alert deduplication — tracks card IDs already alerted this session
 const _alertedTargets = new Set();
 
-// Card image cache per modal open
-let _cardImageUrl    = null;
-let _cardImageLoaded = false;
+// Card detail modal image state
+let _cardImageUrl        = null;
+let _cardImageLoaded     = false;
+let _pendingImageResults = [];
+let _pendingImageCard    = null;
 
-// ── Card-picker modal state ───────────────────────────────────────────────
-let _pickerResults  = [];
-let _pickerCallback = null;
+// View-picker state (card detail image tab)
+let _viewPickerResults  = [];
+let _viewPickerCallback = null;
+let _viewPickerAll      = [];   // unfiltered list for search
+
+// Add-card picker state
+let _addPickerResults   = [];   // all TCG results
+let _addPickerFiltered  = [];   // after search filter
+let _addPickerSelected  = null; // chosen TCG result object
+let _pendingAddPayload  = null; // form values waiting for picker confirmation
 
 // ── Type colour map ───────────────────────────────────────────────────────
 const TYPE_COLORS = {
@@ -55,8 +69,7 @@ function toggleColors() {
 }
 
 // ── Theme ─────────────────────────────────────────────────────────────────
-// Only 3 themes: dark (was dark2 colours), light, lucario
-const THEMES = ['dark', 'light', 'lucario'];
+const THEMES = ['dark', 'light'];
 
 function setTheme(theme) {
   if (!THEMES.includes(theme)) theme = 'dark';
@@ -69,9 +82,9 @@ function setTheme(theme) {
 
 (function initTheme() {
   let saved = localStorage.getItem('pv-theme') || 'dark';
-  // Migrate old 'dark2' → 'dark'
-  if (saved === 'dark2') saved = 'dark';
-  setTheme(THEMES.includes(saved) ? saved : 'dark');
+  // Migrate legacy values
+  if (!THEMES.includes(saved)) saved = 'dark';
+  setTheme(saved);
 })();
 
 window.addEventListener('scroll', () => {
@@ -216,11 +229,154 @@ function populateSetFilter() {
     sets.map(s => `<option value="${esc(s)}"${s === current ? ' selected' : ''}>${esc(s)}</option>`).join('');
 }
 
-// ── Add card ──────────────────────────────────────────────────────────────
-async function addCard() {
+// ── TCG API helpers ───────────────────────────────────────────────────────
+
+/**
+ * Build search-safe name queries from a raw card name.
+ *
+ * Rules:
+ * - Apostrophes (') are TCG API query operators and must be removed entirely
+ *   rather than encoded — "Misty's" → "Mistys"
+ * - Multi-word names are supported natively; we do NOT quote the name since
+ *   the API treats the whole value as a substring match when unquoted
+ * - We produce multiple query variants to maximise hit rate:
+ *     1. Exact quoted match (works for single-word names, e.g. "Charmander")
+ *     2. Unquoted for multi-word names (e.g. Misty Psyduck)
+ *     3. First-word wildcard for partial/promo variants
+ */
+function buildNameQueries(rawName) {
+  // Strip parenthesised variant suffix first: "Charmander (Pokemon Center)" → "Charmander"
+  const base = rawName.replace(/\s*\(.*$/, '').trim();
+  // Remove apostrophes — they are query operators in the TCG API
+  const clean = base.replace(/['"]/g, '').trim();
+  const queries = [];
+
+  // 1. Exact quoted match (best for single-word names)
+  queries.push(`name:"${clean}"`);
+
+  // 2. Unquoted multi-word match (better for "Origin Forme Palkia", "Misty Psyduck")
+  if (clean.includes(' ')) {
+    queries.push(`name:${clean.split(' ').join(' name:')}`);
+  }
+
+  // 3. Wildcard on first word — catches promos and edge cases
+  const firstWord = clean.split(' ')[0];
+  if (firstWord.length >= 3) {
+    queries.push(`name:${firstWord}*`);
+  }
+
+  return queries;
+}
+
+function buildSetQuery(rawSet) {
+  if (!rawSet) return null;
+  const clean = rawSet.replace(/['"]/g, '').trim();
+  return clean || null;
+}
+
+/** Score a TCG result against the user's input name + set */
+function scoreResult(result, cardName, cardSet) {
+  const cleanName  = cardName.replace(/['"]/g, '').replace(/\s*\(.*$/, '').trim().toLowerCase();
+  const cleanSet   = (cardSet || '').replace(/['"]/g, '').trim().toLowerCase();
+  const rName      = (result.name  || '').toLowerCase();
+  const rSetName   = (result.set?.name || '').toLowerCase();
+  const rNum       = (result.number || '').toLowerCase();
+  let score = 0;
+
+  // Name matching
+  if (rName === cleanName)             score += 10;
+  else if (rName.includes(cleanName))  score +=  5;
+  else if (cleanName.includes(rName))  score +=  3;
+
+  // Set matching
+  if (cleanSet) {
+    if (rSetName === cleanSet)                                             score += 6;
+    else if (rSetName.includes(cleanSet) || cleanSet.includes(rSetName))  score += 3;
+    const firstWord = cleanSet.split(' ')[0];
+    if (firstWord.length > 2 && rSetName.includes(firstWord))             score += 1;
+  }
+
+  // Promo / variant bonus — if result number contains letters it's a promo
+  if (/[a-z]/i.test(rNum)) score += 1;
+
+  return score;
+}
+
+const PRICE_KEY_ORDER = ['holofoil','1stEditionHolofoil','normal','reverseHolofoil','unlimited','1stEdition'];
+
+function extractPrice(prices) {
+  if (!prices) return null;
+  for (const key of PRICE_KEY_ORDER) {
+    if (prices[key]?.market) return prices[key].market;
+  }
+  for (const key of Object.keys(prices)) {
+    if (prices[key]?.market) return prices[key].market;
+  }
+  return null;
+}
+
+function applyGradeMultiplier(baseUSD, grade) {
+  const g = (grade || 'raw').toLowerCase();
+  if (g === 'psa 10' || g === 'bgs 10')  return baseUSD * 3.5;
+  if (g === 'psa 9'  || g === 'bgs 9.5') return baseUSD * 1.5;
+  if (g === 'psa 8'  || g === 'bgs 9')   return baseUSD * 1.2;
+  if (g === 'psa 7')                      return baseUSD * 1.05;
+  return baseUSD;
+}
+
+/**
+ * Query the Pokemon TCG API.
+ * Tries multiple query variants (built from buildNameQueries) and merges
+ * deduplicated results.  Set filter applied where provided.
+ */
+async function queryTCG(cardName, cardSet, fields = 'name,set,number,tcgplayer,images') {
+  const base       = 'https://api.pokemontcg.io/v2/cards';
+  const nameQueries = buildNameQueries(cardName);
+  const setQuery    = buildSetQuery(cardSet);
+  const seen        = new Set();
+  const allResults  = [];
+
+  for (const nameQ of nameQueries) {
+    const queries = setQuery
+      ? [
+          `${nameQ} set.name:"${setQuery}"`,
+          `${nameQ} set.name:${setQuery.split(' ')[0]}*`,
+          nameQ,
+        ]
+      : [nameQ];
+
+    for (const q of queries) {
+      const url = `${base}?q=${encodeURIComponent(q)}&select=${fields}&orderBy=-set.releaseDate&pageSize=36`;
+      try {
+        const res  = await fetch(url);
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (!data.data?.length) continue;
+        for (const r of data.data) {
+          if (!seen.has(r.id)) {
+            seen.add(r.id);
+            allResults.push(r);
+          }
+        }
+        // If we already have good results, don't spam all fallbacks
+        if (allResults.length >= 20) break;
+      } catch { /* try next */ }
+    }
+    if (allResults.length >= 20) break;
+  }
+
+  return allResults;
+}
+
+// ── Add-card flow: search → picker → save ────────────────────────────────
+
+/**
+ * Called when user clicks "Search cards →" in the add form.
+ * Validates the form, queries TCG, then shows the card picker.
+ */
+async function searchAndPickCard() {
   const name         = document.getElementById('f-name').value.trim();
   const set          = document.getElementById('f-set').value.trim();
-  const variant      = document.getElementById('f-variant').value.trim();
   const type         = document.getElementById('f-type').value;
   const grade        = document.getElementById('f-grade').value;
   const quantity     = parseInt(document.getElementById('f-quantity').value, 10) || 1;
@@ -232,17 +388,146 @@ async function addCard() {
   if (!name)               { toast('Please enter a card name.', 'error'); return; }
   if (!price || price <= 0) { toast('Please enter a valid purchase price.', 'error'); return; }
 
-  const displayName = variant ? `${name} (${variant})` : name;
+  // Store payload for later use when picker confirms
+  _pendingAddPayload = { name, set, type, grade, quantity, price, purchaseDate, targetPrice, notes };
+
+  const btn = document.getElementById('btn-search-cards');
+  btn.disabled    = true;
+  btn.textContent = 'Searching…';
+
+  try {
+    const results = await queryTCG(name, set, 'name,set,number,images,tcgplayer');
+    if (!results.length) {
+      toast('No cards found — adding with no image. Try a different name or set.', 'info');
+      await saveCardDirect(_pendingAddPayload, null);
+      return;
+    }
+
+    // Sort by relevance
+    const scored = results
+      .map(r => ({ ...r, _score: scoreResult(r, name, set) }))
+      .sort((a, b) => b._score - a._score);
+
+    _addPickerResults  = scored;
+    _addPickerFiltered = scored;
+    _addPickerSelected = null;
+
+    openAddPicker(scored, name, set);
+  } catch (e) {
+    console.error('Card search error:', e);
+    toast('Search failed. Adding card without image.', 'error');
+    await saveCardDirect(_pendingAddPayload, null);
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Search cards →';
+  }
+}
+
+function openAddPicker(results, cardName, cardSet) {
+  document.getElementById('add-picker-title').textContent =
+    'Select the correct "' + cardName + '"' + (cardSet ? ' from ' + cardSet : '');
+  document.getElementById('add-picker-search').value = '';
+  document.getElementById('add-picker-confirm').disabled = true;
+  renderAddPickerGrid(results);
+  document.getElementById('add-picker-overlay').classList.add('active');
+}
+
+function renderAddPickerGrid(results) {
+  const grid = document.getElementById('add-picker-grid');
+  if (!results.length) {
+    grid.innerHTML = '<div class="picker-empty">No results match your filter.</div>';
+    return;
+  }
+  grid.innerHTML = results.map((r, i) => {
+    const thumb = r.images?.small || r.images?.large || '';
+    return `<div class="picker-item" data-idx="${i}" onclick="selectAddPickerItem(${i})">` +
+      '<div class="picker-img-wrap">' +
+        (thumb ? `<img src="${esc(thumb)}" alt="${esc(r.name)}" loading="lazy" />` : '<div class="picker-no-img">No image</div>') +
+      '</div>' +
+      '<div class="picker-info">' +
+        `<div class="picker-name">${esc(r.name)}</div>` +
+        `<div class="picker-set">${esc(r.set?.name || '—')}</div>` +
+        `<div class="picker-num">#${esc(r.number || '?')}</div>` +
+      '</div></div>';
+  }).join('');
+}
+
+function filterAddPicker() {
+  const q = document.getElementById('add-picker-search').value.trim().toLowerCase();
+  _addPickerFiltered = q
+    ? _addPickerResults.filter(r =>
+        (r.name || '').toLowerCase().includes(q) ||
+        (r.set?.name || '').toLowerCase().includes(q) ||
+        (r.number || '').toLowerCase().includes(q)
+      )
+    : _addPickerResults;
+
+  // Reset selection if selected item is no longer visible
+  const stillVisible = _addPickerSelected &&
+    _addPickerFiltered.some(r => r.id === _addPickerSelected.id);
+  if (!stillVisible) {
+    _addPickerSelected = null;
+    document.getElementById('add-picker-confirm').disabled = true;
+  }
+
+  renderAddPickerGrid(_addPickerFiltered);
+
+  // Re-highlight selection if still visible
+  if (_addPickerSelected) {
+    const newIdx = _addPickerFiltered.findIndex(r => r.id === _addPickerSelected.id);
+    if (newIdx >= 0) {
+      document.querySelector(`#add-picker-grid .picker-item[data-idx="${newIdx}"]`)
+        ?.classList.add('selected');
+    }
+  }
+}
+
+function selectAddPickerItem(filteredIdx) {
+  _addPickerSelected = _addPickerFiltered[filteredIdx] || null;
+  document.querySelectorAll('#add-picker-grid .picker-item').forEach((el, i) => {
+    el.classList.toggle('selected', i === filteredIdx);
+  });
+  document.getElementById('add-picker-confirm').disabled = !_addPickerSelected;
+}
+
+async function confirmAddPicker() {
+  if (!_addPickerSelected || !_pendingAddPayload) return;
+  document.getElementById('add-picker-overlay').classList.remove('active');
+  await saveCardDirect(_pendingAddPayload, _addPickerSelected);
+}
+
+function closeAddPicker() {
+  document.getElementById('add-picker-overlay').classList.remove('active');
+  _addPickerSelected = null;
+  _pendingAddPayload = null;
+}
+
+/**
+ * Persist the card to the server.
+ * tcgResult may be null (user skipped picker or search failed).
+ */
+async function saveCardDirect(payload, tcgResult) {
+  const { name, set, type, grade, quantity, price, purchaseDate, targetPrice, notes } = payload;
+
+  const displayName = tcgResult
+    ? `${tcgResult.name} (${tcgResult.set?.name || set || '?'} #${tcgResult.number || '?'})`
+    : name;
+
+  const imageUrl = tcgResult ? (tcgResult.images?.large || tcgResult.images?.small || null) : null;
+  const tcgId    = tcgResult?.id || null;
 
   const res = await fetch('/api/cards', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      name: displayName, set, type, grade, quantity,
+      name: displayName, set: tcgResult?.set?.name || set,
+      type, grade, quantity,
       purchasePrice: price, purchaseDate, targetPrice, notes,
       currentValue: null, lastUpdated: null, url: '', priceHistory: [],
+      imageUrl, tcgId,
     }),
   });
+
   if (!res.ok) { toast('Failed to save card.', 'error'); return; }
 
   const card = await res.json();
@@ -251,14 +536,17 @@ async function addCard() {
   toggleForm();
   toast(displayName + ' added to your vault.', 'success');
 
-  // Reset form
-  ['f-name','f-set','f-variant','f-notes'].forEach(id => { document.getElementById(id).value = ''; });
+  // Reset add form
+  ['f-name','f-set','f-notes'].forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('f-price').value         = '';
   document.getElementById('f-target').value        = '';
   document.getElementById('f-quantity').value      = '1';
   document.getElementById('f-purchase-date').value = '';
   document.getElementById('f-type').value          = '';
   document.getElementById('f-grade').value         = 'raw';
+
+  _pendingAddPayload = null;
+  _addPickerSelected = null;
 }
 
 // ── Delete card ───────────────────────────────────────────────────────────
@@ -342,7 +630,6 @@ async function saveEdit() {
   const idx = cards.findIndex(c => c.id === id);
   if (idx > -1) {
     cards[idx] = { ...cards[idx], name, set, type, grade, quantity, purchasePrice: price, purchaseDate, targetPrice, notes, url };
-    // Reset alert so editing a target price can re-trigger
     _alertedTargets.delete(id);
   }
   closeEditModal();
@@ -459,8 +746,8 @@ function getFilteredCards() {
       const bp = (Number(b.currentValue) - Number(b.purchasePrice)) / Number(b.purchasePrice);
       return bp - ap;
     });
-    if (activeMoversFilter === 'gainers')      filtered = sorted.slice(0, 5);
-    else if (activeMoversFilter === 'losers')  filtered = sorted.slice(-5).reverse();
+    if (activeMoversFilter === 'gainers')     filtered = sorted.slice(0, 5);
+    else if (activeMoversFilter === 'losers') filtered = sorted.slice(-5).reverse();
   }
   return filtered;
 }
@@ -477,15 +764,15 @@ function getSortedCards(list) {
   return [...list].sort((a, b) => {
     let av, bv;
     switch (sortCol) {
-      case 'name':          av = a.name.toLowerCase();             bv = b.name.toLowerCase();            break;
-      case 'set':           av = (a.set||'').toLowerCase();        bv = (b.set||'').toLowerCase();        break;
-      case 'purchasePrice': av = Number(a.purchasePrice);          bv = Number(b.purchasePrice);          break;
-      case 'currentValue':  av = Number(a.currentValue  || 0);     bv = Number(b.currentValue  || 0);    break;
+      case 'name':          av = a.name.toLowerCase();            bv = b.name.toLowerCase();           break;
+      case 'set':           av = (a.set||'').toLowerCase();       bv = (b.set||'').toLowerCase();       break;
+      case 'purchasePrice': av = Number(a.purchasePrice);         bv = Number(b.purchasePrice);         break;
+      case 'currentValue':  av = Number(a.currentValue  || 0);    bv = Number(b.currentValue  || 0);   break;
       case 'profit':
         av = a.currentValue != null ? Number(a.currentValue) - Number(a.purchasePrice) : -Infinity;
         bv = b.currentValue != null ? Number(b.currentValue) - Number(b.purchasePrice) : -Infinity;
         break;
-      case 'lastUpdated':   av = a.lastUpdated || 0;               bv = b.lastUpdated || 0;               break;
+      case 'lastUpdated': av = a.lastUpdated || 0; bv = b.lastUpdated || 0; break;
       default: return 0;
     }
     return av < bv ? -sortDir : av > bv ? sortDir : 0;
@@ -530,179 +817,23 @@ function exportCSV() {
   toast('Collection exported.', 'success');
 }
 
-// ── TCG API helpers ───────────────────────────────────────────────────────
-/**
- * Strip variant suffixes and characters that break the TCG API query syntax.
- * Handles apostrophes in names like "Misty's Psyduck" — the API treats ' as
- * a query operator, so we remove it rather than encode it.
- */
-function sanitiseName(name) {
-  // Remove parenthesised variant suffix first
-  const base = name.replace(/\s*\(.*$/, '').trim();
-  // Remove apostrophes / quotes (API query operators)
-  return base.replace(/['"]/g, '').trim();
-}
-
-function sanitiseSet(set) {
-  return (set || '').replace(/['"]/g, '').trim();
-}
-
-/** Extract "(variant)" hint from stored name, e.g. "Charmander (Pokemon Center)" → "Pokemon Center" */
-function extractVariant(name) {
-  const m = name.match(/\(([^)]+)\)/);
-  return m ? m[1].trim() : null;
-}
-
-/**
- * Score a TCG result against a stored card.
- * Prioritises: exact name > set name > card number / promo variant match.
- */
-function scoreResult(result, card) {
-  const cardName  = sanitiseName(card.name).toLowerCase();
-  const cardSet   = sanitiseSet(card.set).toLowerCase();
-  const variant   = extractVariant(card.name);
-  const rSetLower = (result.set?.name || '').toLowerCase();
-  const rNum      = (result.number   || '').toLowerCase();
-  let score = 0;
-
-  if (result.name?.toLowerCase() === cardName)            score += 10;
-  else if (result.name?.toLowerCase().includes(cardName)) score +=  4;
-
-  if (cardSet) {
-    if (rSetLower === cardSet)                                          score += 6;
-    else if (rSetLower.includes(cardSet) || cardSet.includes(rSetLower)) score += 3;
-    const firstWord = cardSet.split(' ')[0];
-    if (firstWord.length > 2 && rSetLower.includes(firstWord))         score += 1;
-  }
-
-  if (variant) {
-    const varLow = variant.toLowerCase();
-    if (rNum && rNum === varLow)          score += 8;
-    else if (rNum && rNum.includes(varLow)) score += 4;
-    if (rSetLower.includes(varLow))       score += 5;
-  }
-
-  return score;
-}
-
-const PRICE_KEY_ORDER = ['holofoil','1stEditionHolofoil','normal','reverseHolofoil','unlimited','1stEdition'];
-
-function extractPrice(prices) {
-  if (!prices) return null;
-  for (const key of PRICE_KEY_ORDER) {
-    if (prices[key]?.market) return prices[key].market;
-  }
-  for (const key of Object.keys(prices)) {
-    if (prices[key]?.market) return prices[key].market;
-  }
-  return null;
-}
-
-function applyGradeMultiplier(baseUSD, grade) {
-  const g = (grade || 'raw').toLowerCase();
-  if (g === 'psa 10' || g === 'bgs 10')  return baseUSD * 3.5;
-  if (g === 'psa 9'  || g === 'bgs 9.5') return baseUSD * 1.5;
-  if (g === 'psa 8'  || g === 'bgs 9')   return baseUSD * 1.2;
-  if (g === 'psa 7')                      return baseUSD * 1.05;
-  return baseUSD;
-}
-
-/**
- * Query the Pokemon TCG API with a three-tier fallback strategy.
- * Returns an array of raw result objects.
- */
-async function queryTCG(namePart, setSanitized, fields = 'name,set,number,tcgplayer') {
-  const base    = 'https://api.pokemontcg.io/v2/cards';
-  const queries = [];
-
-  if (setSanitized) {
-    queries.push(`name:"${namePart}" set.name:"${setSanitized}"`);
-    const firstWord = setSanitized.split(' ')[0];
-    if (firstWord.length > 2) queries.push(`name:"${namePart}" set.name:${firstWord}*`);
-  }
-  queries.push(`name:"${namePart}"`);
-
-  for (const q of queries) {
-    const url = `${base}?q=${encodeURIComponent(q)}&select=${fields}&orderBy=-set.releaseDate&pageSize=36`;
-    try {
-      const res  = await fetch(url);
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (data.data?.length) return data.data;
-    } catch { /* try next */ }
-  }
-  return [];
-}
-
-// ── Card picker modal ─────────────────────────────────────────────────────
-/**
- * Show a visual grid of candidate TCG cards.
- * The user clicks the correct one; resolves with the chosen result object,
- * or null if dismissed.
- */
-function openCardPicker(results, card) {
-  return new Promise(resolve => {
-    _pickerResults  = results;
-    _pickerCallback = resolve;
-
-    const title = document.getElementById('picker-title');
-    title.textContent = 'Select the correct "' + sanitiseName(card.name) + '" card';
-
-    const grid = document.getElementById('picker-grid');
-    grid.innerHTML = '';
-
-    results.forEach((r, i) => {
-      const thumb = r.images?.small || r.images?.large || '';
-      const item  = document.createElement('div');
-      item.className = 'picker-item';
-      item.innerHTML =
-        '<div class="picker-img-wrap">' +
-          (thumb ? `<img src="${esc(thumb)}" alt="${esc(r.name)}" loading="lazy" />` : '<div class="picker-no-img">No image</div>') +
-        '</div>' +
-        `<div class="picker-info">` +
-          `<div class="picker-name">${esc(r.name)}</div>` +
-          `<div class="picker-set">${esc(r.set?.name || '—')}</div>` +
-          `<div class="picker-num">#${esc(r.number || '?')}</div>` +
-        `</div>`;
-      item.addEventListener('click', () => pickCard(i));
-      grid.appendChild(item);
-    });
-
-    document.getElementById('picker-overlay').classList.add('active');
-  });
-}
-
-function pickCard(index) {
-  document.getElementById('picker-overlay').classList.remove('active');
-  if (_pickerCallback) {
-    _pickerCallback(_pickerResults[index] || null);
-    _pickerCallback = null;
-  }
-}
-
-function closePickerModal() {
-  document.getElementById('picker-overlay').classList.remove('active');
-  if (_pickerCallback) { _pickerCallback(null); _pickerCallback = null; }
-}
-
 // ── Price fetching ────────────────────────────────────────────────────────
 async function fetchPrice(card) {
   try {
-    const namePart     = sanitiseName(card.name);
-    const setSanitized = sanitiseSet(card.set);
-    const results      = await queryTCG(namePart, setSanitized, 'name,set,number,tcgplayer');
+    const results = await queryTCG(card.name, card.set, 'name,set,number,tcgplayer');
     if (!results.length) return null;
 
     const scored = results
-      .map(r => ({ ...r, _score: scoreResult(r, card) }))
+      .map(r => ({ ...r, _score: scoreResult(r, card.name, card.set) }))
       .sort((a, b) => b._score - a._score);
 
-    for (const match of scored) {
-      const base = extractPrice(match.tcgplayer?.prices);
-      if (base == null) continue;
-      return Math.round(applyGradeMultiplier(base, card.grade) * USD_TO_SGD * 100) / 100;
-    }
-    return null;
+    // If card has a stored tcgId, prefer that match
+    const byId = card.tcgId ? scored.find(r => r.id === card.tcgId) : null;
+    const best = byId || scored[0];
+
+    const base = extractPrice(best.tcgplayer?.prices);
+    if (base == null) return null;
+    return Math.round(applyGradeMultiplier(base, card.grade) * USD_TO_SGD * 100) / 100;
   } catch (e) {
     console.error('fetchPrice error for ' + card.name, e);
     return null;
@@ -756,21 +887,74 @@ async function refreshPrices(silent = false) {
   }
 }
 
-// ── Card image fetching ───────────────────────────────────────────────────
-/**
- * Fetch candidate images for a card.  Returns the TCG results array so the
- * caller can show the picker when there are multiple matches, or auto-select
- * when there is exactly one.
- */
+// ── Card image fetching (detail modal) ────────────────────────────────────
 async function fetchCardImageResults(card) {
   try {
-    const namePart     = sanitiseName(card.name);
-    const setSanitized = sanitiseSet(card.set);
-    return await queryTCG(namePart, setSanitized, 'name,set,number,images');
+    return await queryTCG(card.name, card.set, 'name,set,number,images');
   } catch (e) {
     console.warn('fetchCardImageResults error:', e);
     return [];
   }
+}
+
+// ── View picker (image tab inside card detail modal) ──────────────────────
+function openViewPicker(results, card) {
+  return new Promise(resolve => {
+    _viewPickerResults  = results;
+    _viewPickerAll      = results;
+    _viewPickerCallback = resolve;
+
+    document.getElementById('picker-title').textContent =
+      'Select the correct "' + card.name + '" card';
+    document.getElementById('picker-search').value = '';
+    renderViewPickerGrid(results);
+    document.getElementById('picker-overlay').classList.add('active');
+  });
+}
+
+function renderViewPickerGrid(results) {
+  const grid = document.getElementById('picker-grid');
+  if (!results.length) {
+    grid.innerHTML = '<div class="picker-empty">No results match your filter.</div>';
+    return;
+  }
+  grid.innerHTML = results.map((r, i) => {
+    const thumb = r.images?.small || r.images?.large || '';
+    return `<div class="picker-item" onclick="pickViewCard(${i})">` +
+      '<div class="picker-img-wrap">' +
+        (thumb ? `<img src="${esc(thumb)}" alt="${esc(r.name)}" loading="lazy" />` : '<div class="picker-no-img">No image</div>') +
+      '</div>' +
+      '<div class="picker-info">' +
+        `<div class="picker-name">${esc(r.name)}</div>` +
+        `<div class="picker-set">${esc(r.set?.name || '—')}</div>` +
+        `<div class="picker-num">#${esc(r.number || '?')}</div>` +
+      '</div></div>';
+  }).join('');
+}
+
+function filterViewPicker() {
+  const q = document.getElementById('picker-search').value.trim().toLowerCase();
+  _viewPickerResults = q
+    ? _viewPickerAll.filter(r =>
+        (r.name || '').toLowerCase().includes(q) ||
+        (r.set?.name || '').toLowerCase().includes(q) ||
+        (r.number || '').toLowerCase().includes(q)
+      )
+    : _viewPickerAll;
+  renderViewPickerGrid(_viewPickerResults);
+}
+
+function pickViewCard(index) {
+  document.getElementById('picker-overlay').classList.remove('active');
+  if (_viewPickerCallback) {
+    _viewPickerCallback(_viewPickerResults[index] || null);
+    _viewPickerCallback = null;
+  }
+}
+
+function closePickerModal() {
+  document.getElementById('picker-overlay').classList.remove('active');
+  if (_viewPickerCallback) { _viewPickerCallback(null); _viewPickerCallback = null; }
 }
 
 // ── Modal image tab ───────────────────────────────────────────────────────
@@ -802,6 +986,27 @@ function _renderImageTab() {
     foundEl.style.display    = 'none';
     notFoundEl.style.display = 'none';
   }
+}
+
+function switchModalTabWithPicker(tab) {
+  switchModalTab(tab);
+  if (tab === 'image' && !_cardImageLoaded && _pendingImageResults.length) {
+    _showImagePicker(_pendingImageResults, _pendingImageCard);
+  }
+}
+
+async function _showImagePicker(results, card) {
+  const withImages = results.filter(r => r.images?.small || r.images?.large);
+  if (!withImages.length) {
+    _cardImageUrl    = null;
+    _cardImageLoaded = true;
+    _renderImageTab();
+    return;
+  }
+  const chosen     = await openViewPicker(withImages, card);
+  _cardImageUrl    = chosen ? (chosen.images?.large || chosen.images?.small || null) : null;
+  _cardImageLoaded = true;
+  _renderImageTab();
 }
 
 // ── Card detail modal ─────────────────────────────────────────────────────
@@ -865,76 +1070,49 @@ async function openCard(id) {
   switchModalTab('info');
   document.getElementById('modal-overlay').classList.add('active');
 
-  // Fetch image candidates async — show picker if >1 result
-  fetchCardImageResults(card).then(async results => {
-    if (!results.length) {
-      _cardImageUrl    = null;
-      _cardImageLoaded = true;
-    } else {
-      const scored = results
-        .map(r => ({ ...r, _score: scoreResult(r, card) }))
-        .sort((a, b) => b._score - a._score);
-
-      // If top result has a much higher score than runner-up, auto-select it
-      const topScore    = scored[0]._score;
-      const runnerScore = scored[1]?._score ?? 0;
-      const autoSelect  = topScore > 0 && (topScore - runnerScore) >= 5;
-
-      let chosen = autoSelect ? scored[0] : null;
-
-      if (!chosen && scored.length === 1) {
-        chosen = scored[0];
-      } else if (!chosen) {
-        // Show picker — but only if the image tab is open or user explicitly requests
-        // We'll show picker when user clicks the image tab
-        // Store candidates for deferred picker
-        _cardImageLoaded = false; // still "loading" — picker will resolve it
-        _pendingImageResults = scored;
-        _pendingImageCard    = card;
-
-        const imagePanel = document.getElementById('modal-panel-image');
-        if (imagePanel?.style.display !== 'none') {
-          _showImagePicker(scored, card);
-        }
-        // Don't set loaded yet — wait for picker
-        return;
-      }
-
-      _cardImageUrl    = chosen?.images?.large || chosen?.images?.small || null;
-      _cardImageLoaded = true;
-    }
-    const imagePanel = document.getElementById('modal-panel-image');
-    if (imagePanel?.style.display !== 'none') _renderImageTab();
-  });
-
-  // Price chart
-  _renderPriceChart(card, colors);
-}
-
-let _pendingImageResults = [];
-let _pendingImageCard    = null;
-
-async function _showImagePicker(results, card) {
-  const withImages = results.filter(r => r.images?.small || r.images?.large);
-  if (!withImages.length) {
-    _cardImageUrl    = null;
+  // If card has a stored imageUrl, use it directly
+  if (card.imageUrl) {
+    _cardImageUrl    = card.imageUrl;
     _cardImageLoaded = true;
-    _renderImageTab();
-    return;
-  }
-  // Show picker overlay
-  const chosen = await openCardPicker(withImages, card);
-  _cardImageUrl    = chosen ? (chosen.images?.large || chosen.images?.small || null) : null;
-  _cardImageLoaded = true;
-  _renderImageTab();
-}
+  } else {
+    // Async fetch image candidates
+    fetchCardImageResults(card).then(async results => {
+      if (!results.length) {
+        _cardImageUrl    = null;
+        _cardImageLoaded = true;
+      } else {
+        const scored = results
+          .map(r => ({ ...r, _score: scoreResult(r, card.name, card.set) }))
+          .sort((a, b) => b._score - a._score);
 
-// Called when user switches to image tab — trigger picker if pending
-function switchModalTabWithPicker(tab) {
-  switchModalTab(tab);
-  if (tab === 'image' && !_cardImageLoaded && _pendingImageResults.length) {
-    _showImagePicker(_pendingImageResults, _pendingImageCard);
+        const topScore    = scored[0]._score;
+        const runnerScore = scored[1]?._score ?? 0;
+        const autoSelect  = topScore > 0 && (topScore - runnerScore) >= 5;
+
+        let chosen = null;
+        if (autoSelect || scored.length === 1) {
+          chosen = scored[0];
+        } else {
+          _cardImageLoaded     = false;
+          _pendingImageResults = scored;
+          _pendingImageCard    = card;
+
+          const imagePanel = document.getElementById('modal-panel-image');
+          if (imagePanel?.style.display !== 'none') {
+            _showImagePicker(scored, card);
+          }
+          return;
+        }
+
+        _cardImageUrl    = chosen?.images?.large || chosen?.images?.small || null;
+        _cardImageLoaded = true;
+      }
+      const imagePanel = document.getElementById('modal-panel-image');
+      if (imagePanel?.style.display !== 'none') _renderImageTab();
+    });
   }
+
+  _renderPriceChart(card, colors);
 }
 
 function _renderPriceChart(card, colors) {
@@ -1019,9 +1197,13 @@ function _destroyModal() {
 
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  ['modal-overlay','confirm-overlay','edit-overlay','sell-overlay','manual-price-overlay','picker-overlay']
+  ['modal-overlay','confirm-overlay','edit-overlay','sell-overlay',
+   'manual-price-overlay','picker-overlay','add-picker-overlay']
     .forEach(id => document.getElementById(id)?.classList.remove('active'));
   if (priceChart) { priceChart.destroy(); priceChart = null; }
+  // Clean up add-picker state if dismissed by Escape
+  _addPickerSelected = null;
+  _pendingAddPayload = null;
 });
 
 // ── Movers ────────────────────────────────────────────────────────────────
@@ -1052,10 +1234,6 @@ function renderMovers() {
   document.getElementById('movers-losers').innerHTML  = sorted.slice(-3).reverse().map(moverCard).join('');
 }
 
-/**
- * Fire target-price alerts only once per card per page-load.
- * Alerts are NOT reset by search / filter / tab changes.
- */
 function checkTargetAlerts() {
   cards
     .filter(c => !c.sold && c.targetPrice && c.currentValue != null &&
@@ -1128,8 +1306,8 @@ function render() {
       const typeBadge   = c.type
         ? `<span class="type-badge" style="background:${colors.bg};color:${colors.border};border:1px solid ${colors.border};">${esc(c.type)}</span>`
         : '<span class="type-badge type-unknown">—</span>';
-      const targetHit  = c.targetPrice && c.currentValue != null && Number(c.currentValue) >= Number(c.targetPrice);
-      const rowStyle   = `border-left:3px solid ${colors.border}${targetHit ? ';box-shadow:inset 0 0 0 1px rgba(76,175,125,0.2);' : ''};`;
+      const targetHit = c.targetPrice && c.currentValue != null && Number(c.currentValue) >= Number(c.targetPrice);
+      const rowStyle  = `border-left:3px solid ${colors.border}${targetHit ? ';box-shadow:inset 0 0 0 1px rgba(76,175,125,0.2);' : ''};`;
       return `<tr class="card-row${targetHit ? ' target-hit' : ''}" onclick="openCard('${c.id}')" style="${rowStyle}">` +
         `<td title="${esc(c.name)}" style="font-weight:600;">${esc(c.name)}${targetHit ? ' <span style="color:var(--green);font-size:11px;">🎯</span>' : ''}</td>` +
         `<td title="${esc(c.set||'—')}" style="color:var(--text2);">${esc(c.set||'—')}</td>` +
@@ -1196,7 +1374,7 @@ function render() {
 
     soldList.innerHTML = soldCards.map(c => {
       const profit      = c.soldPrice ? (Number(c.soldPrice) - Number(c.purchasePrice)) * (c.quantity||1) : null;
-      const profitStr   = profit != null ? (profit >= 0 ? '+' : '') + 'SGD $' + profit.toFixed(2) : '—';
+      const profitStr   = profit != null ? (profit >= 0 ? '+' : '') + 'SGD $' + (profit).toFixed(2) : '—';
       const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
       return '<div class="mobile-card">' +
         '<div class="mobile-card-top">' +
