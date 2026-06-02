@@ -31,9 +31,8 @@
       <div class="header-right">
         <div class="header-controls">
           <div class="theme-switcher">
-            <button class="theme-option" data-theme="dark"    onclick="setTheme('dark')"    title="Dark">🌑</button>
-            <button class="theme-option" data-theme="light"   onclick="setTheme('light')"   title="Light">☀️</button>
-            <button class="theme-option" data-theme="lucario" onclick="setTheme('lucario')" title="Lucario">⚔️</button>
+            <button class="theme-option" data-theme="dark"  onclick="setTheme('dark')"  title="Dark">🌑</button>
+            <button class="theme-option" data-theme="light" onclick="setTheme('light')" title="Light">☀️</button>
           </div>
           <span class="header-username" id="username-display"></span>
           <button class="logout-btn" onclick="logout()">Log out</button>
@@ -98,20 +97,22 @@
       </div>
 
       <div class="stats-card">
-        <div class="stats-card-title">↓ Worst 5 by ROI</div>
+        <div class="stats-card-title">↓ Bottom 5 by ROI</div>
         <div id="worst-performers" class="performers-list"></div>
       </div>
 
       <div class="stats-card stats-card-wide">
-        <div class="stats-card-title">Realised gains — sold cards</div>
-        <div id="sold-breakdown" class="sold-breakdown-list"></div>
+        <div class="stats-card-title">Sold card breakdown</div>
         <p class="modal-chart-empty" id="sold-empty" style="display:none;">No sold cards yet</p>
+        <div id="sold-breakdown" class="sold-breakdown-list"></div>
       </div>
     </div>
   </main>
 
   <script>
-    const THEMES = ['dark', 'light', 'lucario'];
+    'use strict';
+
+    const THEMES = ['dark', 'light'];
 
     function setTheme(theme) {
       if (!THEMES.includes(theme)) theme = 'dark';
@@ -124,8 +125,8 @@
 
     (function initTheme() {
       let saved = localStorage.getItem('pv-theme') || 'dark';
-      if (saved === 'dark2') saved = 'dark';
-      setTheme(THEMES.includes(saved) ? saved : 'dark');
+      if (!THEMES.includes(saved)) saved = 'dark';
+      setTheme(saved);
     })();
 
     window.addEventListener('scroll', () => {
