@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PokeVault — Stats</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
@@ -15,7 +16,16 @@
   <header class="site-header" id="site-header">
     <div class="header-inner">
       <div class="header-brand">
-        <div class="brand-logo">⬡</div>
+        <div class="brand-logo">
+          <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+            <circle cx="20" cy="20" r="18" fill="#1a1200"/>
+            <path d="M 3 20 A 17 17 0 0 1 37 20 Z" fill="#c9a84c"/>
+            <path d="M 3 20 A 17 17 0 0 0 37 20 Z" fill="#2a2200"/>
+            <rect x="3" y="18" width="34" height="4" fill="#c9a84c"/>
+            <circle cx="20" cy="20" r="6" fill="#1a1200" stroke="#c9a84c" stroke-width="2"/>
+            <circle cx="20" cy="20" r="3" fill="#c9a84c"/>
+          </svg>
+        </div>
         <div>
           <div class="brand-name">PokeVault</div>
           <div class="brand-sub">Card Portfolio Tracker</div>
@@ -38,31 +48,31 @@
   <main class="main-content">
     <div class="section-label" style="margin-bottom:24px;">Portfolio analytics</div>
 
-    <!-- Top stats -->
+    <!-- Top stats — updated icons -->
     <div class="summary-grid" style="margin-bottom:32px;">
       <div class="metric-card">
-        <div class="metric-icon">📊</div>
+        <div class="metric-icon">🏦</div>
         <div class="metric-body">
           <div class="metric-label">Total realised</div>
           <div class="metric-value" id="stat-realised">$0.00</div>
         </div>
       </div>
       <div class="metric-card">
-        <div class="metric-icon">📈</div>
+        <div class="metric-icon">📊</div>
         <div class="metric-body">
           <div class="metric-label">Unrealised P/L</div>
           <div class="metric-value" id="stat-unrealised">$0.00</div>
         </div>
       </div>
       <div class="metric-card">
-        <div class="metric-icon">🏆</div>
+        <div class="metric-icon">🥇</div>
         <div class="metric-body">
           <div class="metric-label">Best ROI card</div>
           <div class="metric-value" id="stat-best-roi" style="font-size:14px;">—</div>
         </div>
       </div>
       <div class="metric-card">
-        <div class="metric-icon">📉</div>
+        <div class="metric-icon">💸</div>
         <div class="metric-body">
           <div class="metric-label">Worst ROI card</div>
           <div class="metric-value" id="stat-worst-roi" style="font-size:14px;">—</div>
@@ -73,7 +83,6 @@
     <!-- Charts row -->
     <div class="stats-grid">
 
-      <!-- Portfolio value over time -->
       <div class="stats-card stats-card-wide">
         <div class="stats-card-title">Portfolio value over time (SGD)</div>
         <div style="height:220px; position:relative;">
@@ -82,7 +91,6 @@
         <p class="modal-chart-empty" id="portfolio-empty" style="display:none;">Refresh prices a few times to build up history</p>
       </div>
 
-      <!-- Value by grade -->
       <div class="stats-card">
         <div class="stats-card-title">Value by grade</div>
         <div style="height:220px; position:relative;">
@@ -90,19 +98,16 @@
         </div>
       </div>
 
-      <!-- Best performers -->
       <div class="stats-card">
         <div class="stats-card-title">↑ Top 5 by ROI</div>
         <div id="best-performers" class="performers-list"></div>
       </div>
 
-      <!-- Worst performers -->
       <div class="stats-card">
         <div class="stats-card-title">↓ Worst 5 by ROI</div>
         <div id="worst-performers" class="performers-list"></div>
       </div>
 
-      <!-- Realised gains breakdown -->
       <div class="stats-card stats-card-wide">
         <div class="stats-card-title">Realised gains — sold cards</div>
         <div id="sold-breakdown" class="sold-breakdown-list"></div>
@@ -147,13 +152,11 @@
       const active = cards.filter(c => !c.sold);
       const sold = cards.filter(c => c.sold);
 
-      // Realised gains
       const realised = sold.reduce((s, c) => {
         const gain = (Number(c.soldPrice) - Number(c.purchasePrice)) * (c.quantity || 1);
         return s + gain;
       }, 0);
 
-      // Unrealised
       const unrealised = active.reduce((s, c) => {
         if (c.currentValue == null) return s;
         return s + (Number(c.currentValue) - Number(c.purchasePrice)) * (c.quantity || 1);
@@ -164,7 +167,6 @@
       document.getElementById('stat-unrealised').textContent = (unrealised >= 0 ? '+' : '') + 'SGD $' + Math.abs(unrealised).toFixed(2);
       document.getElementById('stat-unrealised').className = 'metric-value ' + (unrealised >= 0 ? 'pos' : 'neg');
 
-      // ROI rankings
       const withROI = active.filter(c => c.currentValue != null).map(c => ({
         ...c,
         roi: ((Number(c.currentValue) - Number(c.purchasePrice)) / Number(c.purchasePrice)) * 100
@@ -179,16 +181,9 @@
         document.getElementById('stat-worst-roi').className = 'metric-value neg';
       }
 
-      // Portfolio over time chart
       buildPortfolioChart(active);
-
-      // Grade chart
       buildGradeChart(active);
-
-      // Performers
       buildPerformers(withROI);
-
-      // Sold breakdown
       buildSoldBreakdown(sold);
     }
 
