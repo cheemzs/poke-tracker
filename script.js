@@ -1,1335 +1,1089 @@
 /* ═══════════════════════════════════════════════════════════════════
-   POKEVAULT — STYLE SHEET  v3.0
-   Themes: dark (default) | light | dark2 | lucario
+   POKEVAULT — script.js  v3.0
    ═══════════════════════════════════════════════════════════════════ */
 
-/* ── CSS Variables (dark theme / root defaults) ── */
-:root {
-  --bg:           #0d0f14;
-  --bg2:          #13161e;
-  --bg3:          #1a1e28;
-  --bg4:          #222736;
-  --border:       rgba(255,255,255,0.07);
-  --border2:      rgba(255,255,255,0.12);
-  --text:         #e8eaf0;
-  --text2:        #8b90a0;
-  --text3:        #555a6e;
-  --accent:       #c9a84c;
-  --accent2:      #f0d080;
-  --accent-glow:  rgba(201,168,76,0.15);
-  --green:        #4caf7d;
-  --red:          #e05555;
-  --radius:       12px;
-  --radius-lg:    18px;
-  --header-h:     70px;
-  --font-display: 'Syne', sans-serif;
-  --font-mono:    'DM Mono', monospace;
-  /* legacy aliases */
-  --gold:         var(--accent);
-  --gold2:        var(--accent2);
-  --gold-glow:    var(--accent-glow);
-}
-
-/* ── Light theme ── */
-[data-theme="light"] {
-  --bg:          #f4f2ee;
-  --bg2:         #ffffff;
-  --bg3:         #eceae5;
-  --bg4:         #e0ddd6;
-  --border:      rgba(0,0,0,0.08);
-  --border2:     rgba(0,0,0,0.15);
-  --text:        #1a1a1a;
-  --text2:       #666;
-  --text3:       #aaa;
-  --accent:      #9a6f1a;
-  --accent2:     #b8860b;
-  --accent-glow: rgba(154,111,26,0.1);
-  --gold:        var(--accent);
-  --gold2:       var(--accent2);
-  --gold-glow:   var(--accent-glow);
-}
-
-/* ── Dark2 theme (steel-blue aura) — THE only dark theme ── */
-[data-theme="dark2"] {
-  --bg:          #0a0d1a;
-  --bg2:         #0f1526;
-  --bg3:         #151c32;
-  --bg4:         #1c2540;
-  --border:      rgba(100,140,220,0.12);
-  --border2:     rgba(100,140,220,0.22);
-  --text:        #d4e0f8;
-  --text2:       #7b9fd4;
-  --text3:       #3d5280;
-  --accent:      #7b9fd4;
-  --accent2:     #aac4f0;
-  --accent-glow: rgba(123,159,212,0.15);
-  --green:       #5cc8a0;
-  --red:         #e05555;
-  --gold:        var(--accent);
-  --gold2:       var(--accent2);
-  --gold-glow:   var(--accent-glow);
-}
-
-/* ── Lucario theme (toned-down, not glaring) ── */
-[data-theme="lucario"] {
-  --bg:               #0e1018;
-  --bg2:              #131720;
-  --bg3:              #181d2a;
-  --bg4:              #1e2436;
-  --border:           rgba(80,120,200,0.14);
-  --border2:          rgba(80,120,200,0.26);
-  --text:             #c0ceec;
-  --text2:            #6880b8;
-  --text3:            #3a4a78;
-  --accent:           #4d72c8;
-  --accent2:          #7a9ee8;
-  --accent-glow:      rgba(77,114,200,0.14);
-  --accent-red:       #8a1020;
-  --accent-red2:      #b82038;
-  --accent-red-glow:  rgba(138,16,32,0.14);
-  --green:            #3ab88a;
-  --red:              #c83040;
-  --gold:             var(--accent2);
-  --gold2:            var(--accent2);
-  --gold-glow:        var(--accent-glow);
-}
-
-/* ── Base reset ── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  font-family: var(--font-display);
-  background:  var(--bg);
-  color:       var(--text);
-  min-height:  100vh;
-  transition:  background 0.3s, color 0.3s;
-}
-
-/* Dark2: subtle aura gradient */
-[data-theme="dark2"] body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at 20% 50%, rgba(60,100,200,0.05) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, rgba(100,60,200,0.04) 0%, transparent 50%);
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* Lucario: softer energy background */
-[data-theme="lucario"] body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 70% 35% at 15% 30%, rgba(77,114,200,0.07) 0%, transparent 60%),
-    radial-gradient(ellipse 55% 28% at 85% 70%, rgba(138,16,32,0.06) 0%, transparent 55%),
-    radial-gradient(ellipse 35% 50% at 50% 10%, rgba(77,114,200,0.04) 0%, transparent 50%);
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* Lucario: subtle top accent bar */
-[data-theme="lucario"] body::after {
-  content: '';
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  background: linear-gradient(90deg,
-    transparent 0%,
-    var(--accent-red) 20%,
-    var(--accent)     45%,
-    var(--accent2)    55%,
-    var(--accent-red) 80%,
-    transparent       100%
-  );
-  opacity: 0.55;
-  pointer-events: none;
-  z-index: 200;
-}
-
-/* ── Scrollbar ── */
-::-webkit-scrollbar       { width: 6px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
-
-[data-theme="lucario"] ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-red) 100%);
-}
-
-/* ── Toast ── */
-#toast-container {
-  position: fixed;
-  top: 24px; right: 24px;
-  display: flex; flex-direction: column; gap: 8px;
-  z-index: 9999;
-  pointer-events: none;
-}
-
-.toast {
-  padding: 12px 20px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 500;
-  opacity: 0;
-  transform: translateX(20px);
-  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-  pointer-events: none;
-  font-family: var(--font-mono);
-  letter-spacing: 0.02em;
-  border: 1px solid var(--border2);
-}
-
-.toast.toast-show { opacity: 1; transform: translateX(0); }
-.toast-success { background: #0f2d1a; color: #4cdf8a; border-color: #2a6040; }
-.toast-error   { background: #2d0f0f; color: #e07070; border-color: #602a2a; }
-.toast-info    { background: var(--bg3); color: var(--text2); }
-
-/* ── Modal overlay ── */
-.modal-overlay {
-  display: none;
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.75);
-  backdrop-filter: blur(6px);
-  z-index: 1000;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.modal-overlay.active { display: flex; }
-
-.modal {
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-lg);
-  padding: 32px;
-  width: 100%;
-  max-width: 600px;
-  position: relative;
-  max-height: 90vh;
-  overflow-y: auto;
-  animation: modalIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.modal-card-detail { max-width: 680px; }
-
-@keyframes modalIn {
-  from { opacity: 0; transform: scale(0.95) translateY(10px); }
-  to   { opacity: 1; transform: scale(1) translateY(0); }
-}
-
-[data-theme="lucario"] .modal {
-  border-color: rgba(77,114,200,0.35);
-  box-shadow: 0 0 0 1px rgba(138,16,32,0.1), 0 24px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(122,158,232,0.07);
-}
-
-.modal-type-bar {
-  height: 3px;
-  border-radius: 99px;
-  margin-bottom: 16px;
-  background: var(--accent);
-  transition: background 0.3s;
-}
-
-[data-theme="lucario"] .modal-type-bar {
-  background: linear-gradient(90deg, var(--accent-red) 0%, var(--accent) 50%, var(--accent2) 100%);
-  height: 3px;
-  border-radius: 0;
-}
-
-.modal-close {
-  position: absolute;
-  top: 20px; right: 20px;
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  color: var(--text2);
-  cursor: pointer;
-  width: 32px; height: 32px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.modal-close:hover { background: var(--bg4); color: var(--text); }
-
-/* ── Modal tabs ── */
-.modal-tabs {
-  display: flex;
-  gap: 4px;
-  background: var(--bg3);
-  border-radius: 10px;
-  padding: 4px;
-  margin-bottom: 24px;
-  width: fit-content;
-}
-
-[data-theme="lucario"] .modal-tabs {
-  background: var(--bg3);
-  border: 1px solid rgba(77,114,200,0.18);
-  border-radius: 8px;
-}
-
-.modal-tab {
-  padding: 7px 18px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text2);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  transition: all 0.2s;
-  letter-spacing: 0.04em;
-}
-
-.modal-tab:hover         { color: var(--text); }
-.modal-tab.active        { background: var(--bg2); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
-
-[data-theme="dark2"] .modal-tab.active {
-  background: var(--bg4);
-  color: var(--accent2);
-  box-shadow: 0 0 12px rgba(123,159,212,0.15);
-}
-
-[data-theme="lucario"] .modal-tab.active {
-  background: var(--accent);
-  color: #fff;
-  box-shadow: 0 0 12px rgba(77,114,200,0.3);
-}
-
-/* ── Modal header ── */
-.modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.modal-header h2 {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--text);
-}
-
-.modal-header p { font-size: 13px; color: var(--text2); margin-top: 4px; font-family: var(--font-mono); }
-
-.modal-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 24px;
-}
-
-.modal-stat {
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px;
-}
-
-[data-theme="dark2"] .modal-stat { border-color: rgba(123,159,212,0.15); }
-
-[data-theme="lucario"] .modal-stat {
-  border-color: rgba(77,114,200,0.18);
-  position: relative;
-  overflow: hidden;
-}
-
-[data-theme="lucario"] .modal-stat::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0;
-  width: 3px; height: 100%;
-  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-red) 100%);
-  opacity: 0.5;
-}
-
-.modal-stat-label {
-  font-size: 10px;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 6px;
-  font-family: var(--font-mono);
-}
-
-.modal-stat-value { font-size: 16px; font-weight: 700; font-family: var(--font-mono); }
-
-.modal-chart-label {
-  font-size: 10px;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 12px;
-  font-family: var(--font-mono);
-}
-
-.modal-chart-container { height: 200px; position: relative; }
-
-.modal-chart-empty {
-  text-align: center;
-  color: var(--text3);
-  font-size: 12px;
-  padding: 40px 0;
-  font-family: var(--font-mono);
-}
-
-.modal-actions {
-  margin-top: 24px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-/* ── Modal image tab ── */
-.modal-image-tab-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 320px;
-  padding: 16px 0;
-}
-
-.modal-image-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  color: var(--text3);
-  font-family: var(--font-mono);
-  font-size: 13px;
-}
-
-.modal-image-spinner {
-  width: 36px; height: 36px;
-  border: 3px solid var(--border2);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.modal-card-image-large {
-  max-width: 280px;
-  width: 100%; height: auto;
-  border-radius: 12px;
-  box-shadow: 0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px var(--border2);
-  display: block;
-  margin: 0 auto;
-}
-
-[data-theme="dark2"] .modal-card-image-large {
-  box-shadow: 0 16px 48px rgba(0,0,0,0.7), 0 0 24px rgba(123,159,212,0.2), 0 0 0 1px var(--border2);
-}
-
-[data-theme="lucario"] .modal-card-image-large {
-  box-shadow:
-    0 16px 48px rgba(0,0,0,0.75),
-    0 0 24px rgba(77,114,200,0.2),
-    0 0 0 1px rgba(77,114,200,0.3);
-  border-radius: 10px;
-}
-
-.modal-image-caption {
-  margin-top: 16px;
-  font-size: 12px;
-  color: var(--text3);
-  font-family: var(--font-mono);
-  text-align: center;
-}
-
-.modal-image-notfound {
-  color: var(--text3);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  text-align: center;
-  line-height: 1.7;
-}
-
-/* ── Confirm modal ── */
-.confirm-modal    { max-width: 360px; text-align: center; }
-.confirm-message  { font-size: 14px; color: var(--text); margin-bottom: 24px; line-height: 1.6; }
-.confirm-actions  { display: flex; gap: 10px; justify-content: center; }
-
-.btn-danger {
-  background: var(--red);
-  color: white;
-  border: none;
-  padding: 10px 24px;
-  border-radius: 9px;
-  font-size: 12px;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.btn-danger:hover { filter: brightness(1.15); }
-
-/* ── Header ── */
-.site-header {
-  position: sticky;
-  top: 0; z-index: 100;
-  height: var(--header-h);
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  transition: box-shadow 0.3s, background 0.3s, border-color 0.3s;
-}
-
-.site-header.scrolled { box-shadow: 0 4px 24px rgba(0,0,0,0.3); }
-
-[data-theme="dark2"] .site-header {
-  background: rgba(10,13,26,0.92);
-  border-bottom-color: rgba(100,140,220,0.15);
-  backdrop-filter: blur(12px);
-}
-
-[data-theme="lucario"] .site-header {
-  background: rgba(14,16,24,0.94);
-  border-bottom: 2px solid transparent;
-  border-image: linear-gradient(90deg, transparent 0%, var(--accent-red) 25%, var(--accent) 50%, var(--accent-red) 75%, transparent 100%) 1;
-  backdrop-filter: blur(14px);
-}
-
-.header-inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 32px;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.header-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  text-decoration: none;
-}
-
-.brand-logo {
-  width: 40px; height: 40px;
-  border-radius: 10px;
-  overflow: hidden;
-  flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  border: 1px solid var(--border2);
-}
-
-[data-theme="lucario"] .brand-logo {
-  border: 1px solid rgba(77,114,200,0.4);
-  box-shadow: 0 0 10px rgba(77,114,200,0.2);
-}
-
-.brand-logo-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-.brand-name {
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--accent);
-  line-height: 1;
-}
-
-[data-theme="lucario"] .brand-name {
-  background: linear-gradient(90deg, var(--accent2) 0%, #7aa0e0 50%, var(--accent-red2) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  font-size: 18px;
-}
-
-.brand-sub {
-  font-size: 10px;
-  color: var(--text3);
-  font-family: var(--font-mono);
-  letter-spacing: 0.05em;
-  margin-top: 3px;
-}
-
-.header-right            { margin-left: auto; display: flex; align-items: center; gap: 24px; }
-.header-portfolio        { text-align: right; }
-.header-portfolio-value  { font-size: 18px; font-weight: 700; font-family: var(--font-mono); color: var(--accent); }
-.header-portfolio-label  { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
-.header-controls         { display: flex; align-items: center; gap: 12px; }
-
-/* ── Theme switcher ── */
-.theme-switcher {
-  display: flex; gap: 2px;
-  background: var(--bg3);
-  border-radius: 10px;
-  padding: 3px;
-  border: 1px solid var(--border);
-}
-
-[data-theme="lucario"] .theme-switcher {
-  border-color: rgba(77,114,200,0.25);
-  background: rgba(18,21,32,0.8);
-}
-
-.theme-option {
-  width: 30px; height: 28px;
-  border-radius: 7px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 14px;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.2s;
-  opacity: 0.5;
-}
-
-.theme-option:hover  { opacity: 0.8; }
-.theme-option.active { background: var(--bg2); opacity: 1; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
-
-[data-theme="dark2"]   .theme-option.active { background: var(--accent-glow); box-shadow: 0 0 8px rgba(123,159,212,0.2); }
-[data-theme="lucario"] .theme-option.active { background: var(--accent); box-shadow: 0 0 10px rgba(77,114,200,0.4); opacity: 1; }
-
-/* ── Color toggle ── */
-.color-toggle-label       { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-.color-toggle-label input { display: none; }
-
-.color-toggle-track {
-  width: 34px; height: 20px;
-  background: var(--bg4);
-  border-radius: 10px;
-  position: relative;
-  transition: background 0.2s;
-  border: 1px solid var(--border2);
-}
-
-.color-toggle-label input:checked + .color-toggle-track { background: var(--accent); }
-
-.color-toggle-thumb {
-  position: absolute;
-  width: 14px; height: 14px;
-  background: white;
-  border-radius: 50%;
-  top: 2px; left: 2px;
-  transition: transform 0.2s;
-}
-
-.color-toggle-label input:checked + .color-toggle-track .color-toggle-thumb { transform: translateX(14px); }
-.color-toggle-text  { font-size: 11px; color: var(--text3); font-family: var(--font-mono); white-space: nowrap; }
-.header-username    { font-size: 12px; color: var(--text2); font-family: var(--font-mono); }
-
-.logout-btn {
-  font-size: 12px;
-  padding: 7px 14px;
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  background: transparent;
-  cursor: pointer;
-  color: var(--text2);
-  font-family: var(--font-mono);
-  transition: all 0.2s;
-}
-
-.logout-btn:hover { border-color: var(--red); color: var(--red); }
-
-/* ── Nav ── */
-.header-nav {
-  display: flex; gap: 4px;
-  background: var(--bg3);
-  border-radius: 10px;
-  padding: 4px;
-}
-
-[data-theme="lucario"] .header-nav {
-  background: rgba(18,21,32,0.8);
-  border: 1px solid rgba(77,114,200,0.16);
-}
-
-.nav-link {
-  padding: 7px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text2);
-  text-decoration: none;
-  transition: all 0.2s;
-  font-family: var(--font-mono);
-}
-
-.nav-link:hover  { color: var(--text); }
-.nav-link.active { background: var(--bg2); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
-
-[data-theme="dark2"]   .nav-link.active { background: var(--bg4); color: var(--accent2); box-shadow: 0 0 10px rgba(123,159,212,0.15); }
-[data-theme="lucario"] .nav-link.active { background: var(--accent); color: #fff; box-shadow: 0 0 10px rgba(77,114,200,0.35); font-weight: 700; }
-
-/* ── Main ── */
-.main-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 40px 32px;
-  position: relative;
-  z-index: 1;
-}
-
-/* ── Summary grid ── */
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 40px;
-}
-
-@media (min-width: 900px) {
-  .summary-grid { grid-template-columns: repeat(5, 1fr); }
-}
-
-.metric-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 20px 24px;
-  display: flex; align-items: center; gap: 16px;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  animation: fadeUp 0.4s ease both;
-}
-
-.metric-card:nth-child(1) { animation-delay: 0.05s; }
-.metric-card:nth-child(2) { animation-delay: 0.10s; }
-.metric-card:nth-child(3) { animation-delay: 0.15s; }
-.metric-card:nth-child(4) { animation-delay: 0.20s; }
-.metric-card:nth-child(5) { animation-delay: 0.25s; }
-
-.metric-card:hover { border-color: var(--border2); }
-
-[data-theme="dark2"] .metric-card { border-color: rgba(100,140,220,0.1); }
-[data-theme="dark2"] .metric-card:hover { border-color: rgba(123,159,212,0.3); box-shadow: 0 4px 20px rgba(123,159,212,0.08); }
-
-[data-theme="lucario"] .metric-card {
-  border-color: rgba(77,114,200,0.13);
-  background: var(--bg2);
-  position: relative;
-  overflow: hidden;
-}
-
-[data-theme="lucario"] .metric-card::after {
-  content: '';
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--accent-red) 0%, var(--accent) 50%, transparent 100%);
-  opacity: 0;
-  transition: opacity 0.25s;
-}
-
-[data-theme="lucario"] .metric-card:hover::after { opacity: 0.7; }
-[data-theme="lucario"] .metric-card:hover { border-color: rgba(77,114,200,0.3); box-shadow: 0 4px 20px rgba(77,114,200,0.08); }
-
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(16px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.profit-card.pos { border-color: rgba(76,175,125,0.3); }
-.profit-card.neg { border-color: rgba(224,85,85,0.3); }
-
-.metric-icon  { font-size: 28px; flex-shrink: 0; }
-.metric-body  { min-width: 0; }
-.metric-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; font-family: var(--font-mono); }
-.metric-value { font-size: 22px; font-weight: 700; font-family: var(--font-mono); }
-.metric-value.pos { color: var(--green); }
-.metric-value.neg { color: var(--red); }
-
-/* ── Section label ── */
-.section-label {
-  font-size: 10px;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  font-family: var(--font-mono);
-  margin-bottom: 16px;
-}
-
-[data-theme="lucario"] .section-label { color: var(--accent2); }
-
-/* ── Movers ── */
-#movers-section { margin-bottom: 40px; }
-
-.movers-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-
-.movers-col-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-bottom: 12px;
-  font-family: var(--font-mono);
-}
-
-.gainers-label { color: var(--green); }
-.losers-label  { color: var(--red); }
-.movers-list   { display: flex; flex-direction: column; gap: 8px; }
-
-.mover-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  transition: all 0.2s;
-}
-
-.mover-card:hover  { border-color: var(--border2); transform: translateX(3px); }
-.mover-name        { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mover-set         { font-size: 11px; color: var(--text3); margin-top: 2px; font-family: var(--font-mono); }
-.mover-value       { font-size: 14px; font-weight: 700; white-space: nowrap; text-align: right; font-family: var(--font-mono); }
-.mover-sgd         { font-size: 10px; display: block; color: var(--text3); margin-top: 2px; }
-.profit-pos        { color: var(--green); }
-.profit-neg        { color: var(--red); }
-
-/* ── Collection tabs ── */
-.collection-tabs {
-  display: flex; gap: 4px;
-  background: var(--bg3);
-  border-radius: 10px;
-  padding: 4px;
-  margin-bottom: 20px;
-  width: fit-content;
-}
-
-.col-tab {
-  padding: 8px 20px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text2);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  transition: all 0.2s;
-}
-
-.col-tab:hover  { color: var(--text); }
-.col-tab.active { background: var(--bg2); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
-
-[data-theme="dark2"]   .col-tab.active { background: var(--bg4); color: var(--accent2); box-shadow: 0 0 10px rgba(123,159,212,0.12); }
-[data-theme="lucario"] .col-tab.active { background: var(--accent); color: #fff; box-shadow: 0 0 10px rgba(77,114,200,0.3); font-weight: 700; }
-
-/* ── Controls bar ── */
-.controls-bar {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 16px; gap: 16px; flex-wrap: wrap;
-}
-
-.controls-left  { display: flex; flex-direction: column; gap: 10px; }
-.controls-right { display: flex; gap: 10px; align-items: center; }
-.filter-group   { display: flex; gap: 8px; flex-wrap: wrap; }
-
-.filter-select {
-  font-size: 12px;
-  padding: 8px 12px;
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  background: var(--bg2);
-  color: var(--text2);
-  outline: none; cursor: pointer;
-  font-family: var(--font-mono);
-  transition: border-color 0.2s;
-}
-
-.filter-select:focus,
-.filter-select:hover { border-color: var(--accent); color: var(--text); }
-
-/* ── Search ── */
-.search-wrap  { position: relative; display: flex; align-items: center; }
-.search-icon  { position: absolute; left: 10px; color: var(--text3); font-size: 16px; pointer-events: none; line-height: 1; }
-
-.search-input {
-  font-size: 13px;
-  padding: 8px 12px 8px 32px;
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  background: var(--bg2);
-  color: var(--text);
-  outline: none;
-  font-family: var(--font-mono);
-  width: 240px;
-  transition: border-color 0.2s, width 0.2s;
-}
-
-.search-input:focus       { border-color: var(--accent); width: 300px; }
-.search-input::placeholder { color: var(--text3); }
-
-[data-theme="lucario"] .search-input:focus { border-color: var(--accent); box-shadow: 0 0 10px rgba(77,114,200,0.15); }
-
-/* ── Buttons ── */
-.btn-refresh, .btn-export, .btn-reset {
-  font-size: 12px;
-  padding: 9px 16px;
-  border-radius: 9px;
-  background: transparent;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  letter-spacing: 0.04em;
-  transition: all 0.2s;
-}
-
-.btn-refresh          { border: 1px solid var(--border2); color: var(--text2); }
-.btn-refresh:hover    { border-color: var(--accent); color: var(--accent); }
-.btn-refresh:disabled { opacity: 0.4; cursor: not-allowed; }
-
-.btn-export        { border: 1px solid var(--border2); color: var(--text2); }
-.btn-export:hover  { border-color: var(--green); color: var(--green); }
-
-.btn-reset         { border: 1px solid rgba(224,85,85,0.25); color: var(--text3); }
-.btn-reset:hover   { border-color: var(--red); color: var(--red); background: rgba(224,85,85,0.07); }
-
-.btn-add {
-  font-size: 12px;
-  padding: 9px 20px;
-  border: 1px solid var(--accent);
-  border-radius: 9px;
-  background: var(--accent-glow);
-  color: var(--accent);
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  transition: all 0.2s;
-}
-
-.btn-add:hover { background: color-mix(in srgb, var(--accent) 25%, transparent); }
-
-[data-theme="dark2"]   .btn-add { box-shadow: 0 0 12px rgba(123,159,212,0.1); }
-[data-theme="lucario"] .btn-add {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-  box-shadow: 0 0 12px rgba(77,114,200,0.25);
-  font-weight: 600;
-}
-[data-theme="lucario"] .btn-add:hover {
-  background: var(--accent2);
-  border-color: var(--accent2);
-  box-shadow: 0 0 18px rgba(77,114,200,0.4);
-}
-
-.btn-primary {
-  background: var(--accent);
-  color: #0a0d1a;
-  border: none;
-  padding: 10px 24px;
-  border-radius: 9px;
-  font-size: 12px;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  transition: all 0.2s;
-}
-
-.btn-primary:hover        { filter: brightness(1.15); }
-[data-theme="light"]      .btn-primary { color: #fff; }
-[data-theme="lucario"]    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 0 12px rgba(77,114,200,0.3); }
-[data-theme="lucario"]    .btn-primary:hover { background: var(--accent2); box-shadow: 0 0 18px rgba(77,114,200,0.5); filter: none; }
-
-.btn-cancel {
-  background: transparent;
-  border: 1px solid var(--border2);
-  padding: 10px 20px;
-  border-radius: 9px;
-  font-size: 12px;
-  cursor: pointer;
-  color: var(--text2);
-  font-family: var(--font-mono);
-  transition: all 0.2s;
-}
-
-.btn-cancel:hover { background: var(--bg3); }
-
-.btn-sell {
-  font-size: 12px;
-  padding: 8px 20px;
-  border: 1px solid rgba(76,175,125,0.4);
-  border-radius: 8px;
-  background: rgba(76,175,125,0.08);
-  cursor: pointer;
-  color: var(--green);
-  font-family: var(--font-mono);
-  letter-spacing: 0.05em;
-  transition: all 0.2s;
-}
-
-.btn-sell:hover { background: rgba(76,175,125,0.2); }
-
-.btn-edit {
-  font-size: 12px;
-  padding: 8px 16px;
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  background: transparent;
-  cursor: pointer;
-  color: var(--text2);
-  font-family: var(--font-mono);
-  letter-spacing: 0.05em;
-  transition: all 0.2s;
-}
-
-.btn-edit:hover { border-color: var(--accent); color: var(--accent); }
-
-.btn-manual-price {
-  font-size: 12px;
-  padding: 8px 16px;
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  background: transparent;
-  cursor: pointer;
-  color: var(--text2);
-  font-family: var(--font-mono);
-  letter-spacing: 0.05em;
-  transition: all 0.2s;
-}
-
-.btn-manual-price:hover { border-color: var(--accent); color: var(--accent); }
-
-.btn-row-edit {
-  background: none; border: none;
-  cursor: pointer;
-  color: var(--text3);
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.btn-row-edit:hover { color: var(--accent); background: var(--accent-glow); }
-
-.full-width { width: 100%; }
-
-/* ── Add form ── */
-.form-card {
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-lg);
-  padding: 28px;
-  margin-bottom: 20px;
-  display: none;
-  animation: fadeUp 0.2s ease both;
-}
-
-.form-card.open { display: block; }
-
-.form-title {
-  font-size: 12px;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-family: var(--font-mono);
-  margin-bottom: 20px;
-}
-
-[data-theme="lucario"] .form-card { border-color: rgba(77,114,200,0.25); box-shadow: 0 0 24px rgba(77,114,200,0.05); }
-
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-  margin-bottom: 20px;
-}
-
-.form-group             { display: flex; flex-direction: column; gap: 6px; }
-.form-group label       { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.1em; font-family: var(--font-mono); }
-.form-group input,
-.form-group select      { font-size: 13px; padding: 10px 12px; border: 1px solid var(--border2); border-radius: 8px; background: var(--bg3); color: var(--text); outline: none; font-family: var(--font-mono); transition: border-color 0.2s; }
-.form-group input:focus,
-.form-group select:focus { border-color: var(--accent); }
-
-[data-theme="lucario"] .form-group input:focus,
-[data-theme="lucario"] .form-group select:focus { border-color: var(--accent); box-shadow: 0 0 8px rgba(77,114,200,0.15); }
-
-.form-group.full { grid-column: 1 / -1; }
-.form-actions    { display: flex; gap: 10px; justify-content: flex-end; }
-
-/* ── Table ── */
-.table-wrap {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  margin-bottom: 16px;
-  width: 100%;
-}
-
-[data-theme="dark2"]   .table-wrap { border-color: rgba(100,140,220,0.12); box-shadow: 0 0 30px rgba(0,0,0,0.2); }
-[data-theme="lucario"] .table-wrap { border-color: rgba(77,114,200,0.18); box-shadow: 0 0 30px rgba(0,0,0,0.25); }
-
-table          { width: 100%; border-collapse: collapse; table-layout: fixed; }
-
-th {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--text3);
-  text-align: left;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg3);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-family: var(--font-mono);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-[data-theme="dark2"]   th { background: var(--bg3); color: var(--text3); border-bottom-color: rgba(100,140,220,0.12); }
-[data-theme="lucario"] th { background: var(--bg3); color: var(--accent2); border-bottom: 1px solid rgba(77,114,200,0.18); }
-
-th.sortable         { cursor: pointer; user-select: none; transition: color 0.2s; }
-th.sortable:hover   { color: var(--accent); }
-.sort-arr           { font-size: 9px; color: var(--text3); opacity: 0.5; }
-
-td {
-  padding: 13px 16px;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-  vertical-align: middle;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  transition: background 0.15s;
-}
-
-tr:last-child td { border-bottom: none; }
-.card-row        { cursor: pointer; }
-.card-row:hover td { background: var(--bg3); }
-
-[data-theme="dark2"]   .card-row:hover td { background: rgba(100,140,220,0.06); }
-[data-theme="lucario"] .card-row:hover td { background: rgba(77,114,200,0.07); }
-
-/* ── Badges ── */
-.badge {
-  display: inline-block;
-  font-size: 10px;
-  padding: 3px 10px;
-  border-radius: 99px;
-  font-weight: 600;
-  font-family: var(--font-mono);
-  letter-spacing: 0.05em;
-}
-
-.badge-psa { background: rgba(74,144,217,0.15); color: #6abaff; border: 1px solid rgba(74,144,217,0.3); }
-.badge-raw { background: var(--bg3); color: var(--text3); border: 1px solid var(--border); }
-
-[data-theme="lucario"] .badge-psa { background: rgba(77,114,200,0.18); color: var(--accent2); border-color: rgba(77,114,200,0.35); }
-
-.type-badge    { display: inline-block; font-size: 10px; padding: 3px 10px; border-radius: 99px; font-weight: 600; font-family: var(--font-mono); }
-.type-unknown  { background: var(--bg3); color: var(--text3); border: 1px solid var(--border); }
-
-/* ── Delete button ── */
-.del-btn        { background: none; border: none; cursor: pointer; color: var(--text3); padding: 4px 8px; border-radius: 6px; font-size: 14px; transition: all 0.2s; }
-.del-btn:hover  { color: var(--red); background: rgba(224,85,85,0.1); }
-
-/* ── Target hit ── */
-.target-hit td { background: rgba(76,175,125,0.04) !important; }
-
-/* ── Mobile list ── */
-.card-list { display: none; }
-
-.mobile-card {
-  border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: 10px;
-  cursor: pointer;
-  border: 1px solid var(--border);
-  background: var(--bg2);
-  transition: all 0.2s;
-}
-
-.mobile-card:hover         { border-color: var(--border2); }
-.mobile-card-top           { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
-.mobile-card-name          { font-size: 15px; font-weight: 600; }
-.mobile-card-set           { font-size: 11px; color: var(--text3); margin-top: 3px; font-family: var(--font-mono); }
-.mobile-card-bottom        { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--border); }
-.mobile-card-price         { font-size: 11px; color: var(--text2); font-family: var(--font-mono); line-height: 1.8; }
-.mobile-card-profit        { font-size: 14px; font-weight: 700; font-family: var(--font-mono); }
-.mobile-card-delete        { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 16px; padding: 4px; transition: color 0.2s; }
-.mobile-card-delete:hover  { color: var(--red); }
-
-/* ── Empty state ── */
-.empty-state {
-  text-align: center;
-  padding: 64px 24px;
-  color: var(--text3);
-  font-size: 13px;
-  font-family: var(--font-mono);
-}
-
-/* ── Sold summary ── */
-.sold-summary {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px 20px;
-  margin-bottom: 16px;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--text2);
-}
-
-/* ── FX rate ── */
-.last-updated { font-size: 11px; color: var(--text3); margin-top: 8px; font-family: var(--font-mono); }
-#fx-rate      { color: var(--text3); font-family: var(--font-mono); font-size: 11px; }
-
-/* ── Auth page ── */
-.auth-page {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 24px;
-  background: var(--bg);
-}
-
-.auth-box {
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-lg);
-  padding: 40px;
-  width: 100%;
-  max-width: 400px;
-  animation: fadeUp 0.3s ease both;
-  position: relative;
-  z-index: 1;
-}
-
-[data-theme="dark2"]   .auth-box { border-color: rgba(123,159,212,0.25); box-shadow: 0 0 40px rgba(123,159,212,0.07); }
-[data-theme="lucario"] .auth-box { border-color: rgba(77,114,200,0.3); box-shadow: 0 0 40px rgba(77,114,200,0.08); }
-
-.auth-logo {
-  width: 72px; height: 72px;
-  border-radius: 16px;
-  overflow: hidden;
-  margin: 0 auto 20px;
-  border: 2px solid var(--border2);
-}
-
-[data-theme="lucario"] .auth-logo { border-color: rgba(77,114,200,0.4); box-shadow: 0 0 16px rgba(77,114,200,0.2); }
-
-.auth-logo-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-.auth-title    { font-size: 24px; font-weight: 800; text-align: center; margin-bottom: 6px; }
-.auth-subtitle { font-size: 13px; color: var(--text3); text-align: center; font-family: var(--font-mono); margin-bottom: 28px; }
-
-.auth-tabs {
-  display: flex; gap: 4px;
-  background: var(--bg3);
-  border-radius: 10px;
-  padding: 4px;
-  margin-bottom: 24px;
-}
-
-.auth-tab {
-  flex: 1;
-  padding: 8px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text2);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  transition: all 0.2s;
-}
-
-.auth-tab.active { background: var(--bg2); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
-
-[data-theme="lucario"] .auth-tab.active { background: var(--accent); color: #fff; box-shadow: 0 0 10px rgba(77,114,200,0.3); }
-
-.auth-error { font-size: 12px; color: var(--red); font-family: var(--font-mono); margin: 8px 0; min-height: 16px; }
-
-/* ── Stats page ── */
-.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-
-.stats-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 24px;
-}
-
-[data-theme="dark2"]   .stats-card { border-color: rgba(100,140,220,0.1); }
-[data-theme="lucario"] .stats-card { border-color: rgba(77,114,200,0.14); position: relative; overflow: hidden; }
-
-[data-theme="lucario"] .stats-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--accent-red) 0%, var(--accent) 40%, transparent 100%);
-  opacity: 0.5;
-}
-
-.stats-card-wide  { grid-column: 1 / -1; }
-.stats-card-title { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 20px; font-family: var(--font-mono); }
-
-[data-theme="lucario"] .stats-card-title { color: var(--accent2); }
-
-.performers-list      { display: flex; flex-direction: column; gap: 10px; }
-
-.performer-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.performer-row:last-child { border-bottom: none; }
-.performer-name           { font-size: 13px; font-weight: 600; }
-.performer-set            { font-size: 11px; color: var(--text3); font-family: var(--font-mono); margin-left: 8px; font-weight: 400; }
-.performer-roi            { font-size: 14px; font-weight: 700; font-family: var(--font-mono); white-space: nowrap; }
-
-.sold-breakdown-list { display: flex; flex-direction: column; gap: 12px; }
-
-.sold-breakdown-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.sold-breakdown-row:last-child { border-bottom: none; }
-
-/* ── Responsive ── */
-@media (max-width: 900px) {
-  .summary-grid      { grid-template-columns: 1fr 1fr; }
-  .header-portfolio  { display: none; }
-}
-
-@media (max-width: 700px) {
-  .header-inner    { padding: 0 16px; }
-  .main-content    { padding: 24px 16px; }
-  .form-grid       { grid-template-columns: 1fr 1fr; }
-  .movers-grid     { grid-template-columns: 1fr; }
-  .table-wrap      { display: none; }
-  .card-list       { display: block; }
-  .controls-bar    { flex-direction: column; align-items: flex-start; }
-  .header-controls { gap: 8px; }
-  .color-toggle-text { display: none; }
-  .brand-sub       { display: none; }
-  .summary-grid    { grid-template-columns: 1fr 1fr; gap: 10px; }
-  .search-input    { width: 100%; }
-  .search-input:focus { width: 100%; }
-  .btn-export, .btn-reset { padding: 9px 10px; }
-  .stats-grid      { grid-template-columns: 1fr; }
-  .stats-card-wide { grid-column: 1; }
-  .header-nav      { display: none; }
-  .collection-tabs { width: 100%; }
-  .col-tab         { flex: 1; text-align: center; }
-  .modal           { padding: 24px 20px; }
-  .theme-switcher  { display: none; }
-}
-
-@media (max-width: 480px) {
-  .controls-right { flex-wrap: wrap; }
-}
+'use strict';
+
+// ── State ─────────────────────────────────────────────────────────────────
+let USD_TO_SGD        = 1.35;
+let cards             = [];
+let priceChart        = null;
+let colorEnabled      = true;
+let activeTypeFilter  = '';
+let activeSetFilter   = '';
+let activeMoversFilter = '';
+let searchQuery       = '';
+let editingCardId     = null;
+let activeCollectionTab = 'active';
+let sortCol           = null;
+let sortDir           = 1;
+
+// Cached card image state for the current modal
+let _currentCardImageUrl    = null;
+let _currentCardImageLoaded = false;
+
+// ── Type colour map ───────────────────────────────────────────────────────
+const TYPE_COLORS = {
+  Fire:      { bg: 'rgba(255,100,50,0.12)',  border: '#ff6432', chart: '#ff6432' },
+  Water:     { bg: 'rgba(74,144,217,0.12)',  border: '#4a90d9', chart: '#4a90d9' },
+  Grass:     { bg: 'rgba(76,175,80,0.12)',   border: '#4caf50', chart: '#4caf50' },
+  Electric:  { bg: 'rgba(255,200,0,0.12)',   border: '#ffc800', chart: '#ffc800' },
+  Psychic:   { bg: 'rgba(220,80,160,0.12)',  border: '#dc50a0', chart: '#dc50a0' },
+  Fighting:  { bg: 'rgba(192,80,40,0.12)',   border: '#c05028', chart: '#c05028' },
+  Dark:      { bg: 'rgba(80,60,120,0.12)',   border: '#503c78', chart: '#8060c0' },
+  Steel:     { bg: 'rgba(120,140,160,0.12)', border: '#788ca0', chart: '#788ca0' },
+  Dragon:    { bg: 'rgba(40,100,220,0.12)',  border: '#2864dc', chart: '#2864dc' },
+  Fairy:     { bg: 'rgba(240,100,180,0.12)', border: '#f064b4', chart: '#f064b4' },
+  Normal:    { bg: 'rgba(160,160,120,0.12)', border: '#a0a078', chart: '#a0a078' },
+  Colorless: { bg: 'rgba(180,180,180,0.08)', border: '#b4b4b4', chart: '#b4b4b4' },
+};
+
+function getTypeColor(type) {
+  if (!colorEnabled) return { bg: 'transparent', border: 'var(--border)', chart: 'var(--accent)' };
+  return TYPE_COLORS[type] || { bg: 'transparent', border: 'var(--border)', chart: 'var(--accent)' };
+}
+
+function toggleColors() {
+  colorEnabled = document.getElementById('color-toggle').checked;
+  render();
+}
+
+// ── Theme ─────────────────────────────────────────────────────────────────
+const THEMES = ['dark', 'light', 'dark2', 'lucario'];
+
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('pv-theme', theme);
+  document.querySelectorAll('.theme-option').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-theme') === theme);
+  });
+}
+
+(function initTheme() {
+  const saved = localStorage.getItem('pv-theme') || 'dark';
+  setTheme(THEMES.includes(saved) ? saved : 'dark');
+})();
+
+window.addEventListener('scroll', () => {
+  const header = document.getElementById('site-header');
+  if (header) header.classList.toggle('scrolled', window.scrollY > 20);
+});
+
+// ── Exchange rate ─────────────────────────────────────────────────────────
+async function fetchExchangeRate() {
+  try {
+    const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.rates?.SGD) {
+      USD_TO_SGD = data.rates.SGD;
+      const el = document.getElementById('fx-rate');
+      if (el) el.textContent = 'USD/SGD: ' + USD_TO_SGD.toFixed(4);
+    }
+  } catch {
+    console.warn('Exchange rate fetch failed — using fallback 1.35');
+  }
+}
+
+// ── Init / Auth ───────────────────────────────────────────────────────────
+async function init() {
+  const res = await fetch('/api/me');
+  if (!res.ok) { window.location.href = '/login.html'; return; }
+  const { username } = await res.json();
+  document.getElementById('username-display').textContent = username;
+  await fetchExchangeRate();
+  await loadCards();
+  checkAutoRefresh();
+}
+
+async function logout() {
+  await fetch('/api/logout', { method: 'POST' });
+  window.location.href = '/login.html';
+}
+
+async function loadCards() {
+  const res = await fetch('/api/cards');
+  if (!res.ok) { window.location.href = '/login.html'; return; }
+  cards = await res.json();
+  render();
+}
+
+async function checkAutoRefresh() {
+  const active     = cards.filter(c => !c.sold);
+  if (active.length === 0) return;
+  const lastRefresh = localStorage.getItem('lastRefresh');
+  const oneDayAgo   = Date.now() - 24 * 60 * 60 * 1000;
+  if (!lastRefresh || parseInt(lastRefresh, 10) < oneDayAgo) {
+    toast('Auto-refreshing prices…', 'info');
+    await refreshPrices(true);
+  }
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function fmt(val) {
+  return val != null ? 'SGD $' + Number(val).toFixed(2) : '—';
+}
+
+function isSameDay(ts1, ts2) {
+  const d1 = new Date(ts1);
+  const d2 = new Date(ts2);
+  return d1.getFullYear() === d2.getFullYear() &&
+         d1.getMonth()    === d2.getMonth()    &&
+         d1.getDate()     === d2.getDate();
+}
+
+function animateValue(el, target, prefix) {
+  const start    = parseFloat(el.getAttribute('data-val') || '0');
+  const duration = 600;
+  const startTime = performance.now();
+  const step = now => {
+    const p    = Math.min((now - startTime) / duration, 1);
+    const ease = 1 - Math.pow(1 - p, 3);
+    el.textContent = prefix + '$' + (start + (target - start) * ease).toFixed(2);
+    if (p < 1) {
+      requestAnimationFrame(step);
+    } else {
+      el.textContent = prefix + '$' + target.toFixed(2);
+      el.setAttribute('data-val', target);
+    }
+  };
+  requestAnimationFrame(step);
+}
+
+function toast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const el        = document.createElement('div');
+  el.className    = 'toast toast-' + type;
+  el.textContent  = message;
+  container.appendChild(el);
+  setTimeout(() => el.classList.add('toast-show'), 10);
+  setTimeout(() => {
+    el.classList.remove('toast-show');
+    setTimeout(() => el.remove(), 300);
+  }, 3500);
+}
+
+function confirmDialog(message) {
+  return new Promise(resolve => {
+    document.getElementById('confirm-message').textContent = message;
+    const overlay = document.getElementById('confirm-overlay');
+    overlay.classList.add('active');
+    const ok     = document.getElementById('confirm-ok');
+    const cancel = document.getElementById('confirm-cancel');
+    function cleanup(result) {
+      overlay.classList.remove('active');
+      ok.removeEventListener('click', onOk);
+      cancel.removeEventListener('click', onCancel);
+      resolve(result);
+    }
+    const onOk     = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    ok.addEventListener('click', onOk);
+    cancel.addEventListener('click', onCancel);
+  });
+}
+
+// ── Tab navigation ────────────────────────────────────────────────────────
+function switchTab(tab) {
+  activeCollectionTab = tab;
+  document.getElementById('tab-active').classList.toggle('active', tab === 'active');
+  document.getElementById('tab-sold').classList.toggle('active',   tab === 'sold');
+  document.getElementById('panel-active').style.display = tab === 'active' ? 'block' : 'none';
+  document.getElementById('panel-sold').style.display   = tab === 'sold'   ? 'block' : 'none';
+}
+
+function toggleForm() {
+  const f = document.getElementById('add-form');
+  f.classList.toggle('open');
+  if (f.classList.contains('open')) document.getElementById('f-name').focus();
+}
+
+// ── Set filter ────────────────────────────────────────────────────────────
+function populateSetFilter() {
+  const sets    = [...new Set(cards.filter(c => !c.sold && c.set).map(c => c.set))].sort();
+  const sel     = document.getElementById('filter-set');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All sets</option>' +
+    sets.map(s => `<option value="${esc(s)}"${s === current ? ' selected' : ''}>${esc(s)}</option>`).join('');
+}
+
+// ── Add card ──────────────────────────────────────────────────────────────
+async function addCard() {
+  const name         = document.getElementById('f-name').value.trim();
+  const set          = document.getElementById('f-set').value.trim();
+  const variant      = document.getElementById('f-variant').value.trim();
+  const type         = document.getElementById('f-type').value;
+  const grade        = document.getElementById('f-grade').value;
+  const quantity     = parseInt(document.getElementById('f-quantity').value, 10) || 1;
+  const price        = parseFloat(document.getElementById('f-price').value);
+  const purchaseDate = document.getElementById('f-purchase-date').value;
+  const targetPrice  = parseFloat(document.getElementById('f-target').value) || null;
+  const notes        = document.getElementById('f-notes').value.trim();
+
+  if (!name)              { toast('Please enter a card name.', 'error'); return; }
+  if (!price || price <= 0) { toast('Please enter a valid purchase price.', 'error'); return; }
+
+  // Build the display name: append variant if provided
+  const displayName = variant ? `${name} (${variant})` : name;
+
+  const res = await fetch('/api/cards', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: displayName, set, type, grade, quantity,
+      purchasePrice: price, purchaseDate, targetPrice, notes,
+      currentValue: null, lastUpdated: null, url: '', priceHistory: [],
+    }),
+  });
+  if (!res.ok) { toast('Failed to save card.', 'error'); return; }
+  const card = await res.json();
+  cards.push(card);
+  render();
+  toggleForm();
+  toast(displayName + ' added to your vault.', 'success');
+
+  // Reset form
+  ['f-name', 'f-set', 'f-variant', 'f-notes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-price').value        = '';
+  document.getElementById('f-target').value       = '';
+  document.getElementById('f-quantity').value     = '1';
+  document.getElementById('f-purchase-date').value = '';
+  document.getElementById('f-type').value         = '';
+  document.getElementById('f-grade').value        = 'raw';
+}
+
+// ── Delete card ───────────────────────────────────────────────────────────
+async function deleteCard(id) {
+  const card      = cards.find(c => c.id === id);
+  const confirmed = await confirmDialog('Remove "' + (card ? card.name : 'this card') + '" from your vault?');
+  if (!confirmed) return;
+  const res = await fetch('/api/cards/' + id, { method: 'DELETE' });
+  if (!res.ok) { toast('Failed to delete card.', 'error'); return; }
+  cards = cards.filter(c => c.id !== id);
+  render();
+  toast('Card removed.', 'info');
+}
+
+// ── Reset vault ───────────────────────────────────────────────────────────
+async function resetVault() {
+  const confirmed = await confirmDialog('Delete ALL cards from your vault? This cannot be undone.');
+  if (!confirmed) return;
+  let failed = 0;
+  for (const card of [...cards]) {
+    const res = await fetch('/api/cards/' + card.id, { method: 'DELETE' });
+    if (!res.ok) failed++;
+  }
+  if (failed > 0) toast(failed + ' card(s) could not be deleted.', 'error');
+  cards = [];
+  render();
+  toast('Vault reset. All cards removed.', 'info');
+}
+
+// ── Edit modal ────────────────────────────────────────────────────────────
+function openEditForm(idOverride) {
+  const targetId = idOverride || editingCardId;
+  if (!targetId) return;
+  editingCardId = targetId;
+  const card = cards.find(c => c.id === targetId);
+  if (!card) return;
+
+  document.getElementById('edit-id').value            = card.id;
+  document.getElementById('edit-name').value          = card.name          || '';
+  document.getElementById('edit-set').value           = card.set           || '';
+  document.getElementById('edit-type').value          = card.type          || '';
+  document.getElementById('edit-grade').value         = card.grade         || 'raw';
+  document.getElementById('edit-quantity').value      = card.quantity      || 1;
+  document.getElementById('edit-price').value         = card.purchasePrice || '';
+  document.getElementById('edit-purchase-date').value = card.purchaseDate  || '';
+  document.getElementById('edit-target').value        = card.targetPrice   || '';
+  document.getElementById('edit-notes').value         = card.notes         || '';
+  document.getElementById('edit-url').value           = card.url           || '';
+
+  document.getElementById('modal-overlay').classList.remove('active');
+  document.getElementById('edit-overlay').classList.add('active');
+}
+
+function closeEditModal() {
+  document.getElementById('edit-overlay').classList.remove('active');
+}
+
+async function saveEdit() {
+  const id          = document.getElementById('edit-id').value;
+  const name        = document.getElementById('edit-name').value.trim();
+  const set         = document.getElementById('edit-set').value.trim();
+  const type        = document.getElementById('edit-type').value;
+  const grade       = document.getElementById('edit-grade').value;
+  const quantity    = parseInt(document.getElementById('edit-quantity').value, 10) || 1;
+  const price       = parseFloat(document.getElementById('edit-price').value);
+  const purchaseDate = document.getElementById('edit-purchase-date').value;
+  const targetPrice = parseFloat(document.getElementById('edit-target').value) || null;
+  const notes       = document.getElementById('edit-notes').value.trim();
+  const url         = document.getElementById('edit-url').value.trim();
+
+  if (!name)              { toast('Card name is required.', 'error'); return; }
+  if (!price || price <= 0) { toast('Please enter a valid price.', 'error'); return; }
+
+  const res = await fetch('/api/cards/' + id, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, set, type, grade, quantity, purchasePrice: price, purchaseDate, targetPrice, notes, url }),
+  });
+  if (!res.ok) { toast('Failed to save changes.', 'error'); return; }
+  const idx = cards.findIndex(c => c.id === id);
+  if (idx > -1) {
+    cards[idx] = { ...cards[idx], name, set, type, grade, quantity, purchasePrice: price, purchaseDate, targetPrice, notes, url };
+  }
+  closeEditModal();
+  render();
+  toast('Card updated.', 'success');
+}
+
+// ── Sell modal ────────────────────────────────────────────────────────────
+function openSellForm() {
+  const card = cards.find(c => c.id === editingCardId);
+  if (!card) return;
+  document.getElementById('sell-id').value    = card.id;
+  document.getElementById('sell-price').value = card.currentValue || '';
+  document.getElementById('sell-date').value  = new Date().toISOString().split('T')[0];
+  document.getElementById('sell-to').value    = '';
+  document.getElementById('modal-overlay').classList.remove('active');
+  document.getElementById('sell-overlay').classList.add('active');
+}
+
+function closeSellModal() {
+  document.getElementById('sell-overlay').classList.remove('active');
+}
+
+async function confirmSell() {
+  const id        = document.getElementById('sell-id').value;
+  const soldPrice = parseFloat(document.getElementById('sell-price').value);
+  const soldDate  = document.getElementById('sell-date').value;
+  const soldTo    = document.getElementById('sell-to').value.trim();
+  if (!soldPrice || soldPrice <= 0) { toast('Please enter a valid sale price.', 'error'); return; }
+  const res = await fetch('/api/cards/' + id, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sold: true, soldPrice, soldDate, soldTo }),
+  });
+  if (!res.ok) { toast('Failed to mark as sold.', 'error'); return; }
+  const idx = cards.findIndex(c => c.id === id);
+  if (idx > -1) cards[idx] = { ...cards[idx], sold: true, soldPrice, soldDate, soldTo };
+  closeSellModal();
+  render();
+  toast('Card marked as sold.', 'success');
+}
+
+// ── Manual price modal ────────────────────────────────────────────────────
+function openManualPrice() {
+  const card = cards.find(c => c.id === editingCardId);
+  if (!card) return;
+  document.getElementById('manual-price-id').value  = card.id;
+  document.getElementById('manual-price-val').value = card.currentValue || '';
+  document.getElementById('modal-overlay').classList.remove('active');
+  document.getElementById('manual-price-overlay').classList.add('active');
+  setTimeout(() => document.getElementById('manual-price-val').focus(), 100);
+}
+
+function closeManualPriceModal() {
+  document.getElementById('manual-price-overlay').classList.remove('active');
+}
+
+async function saveManualPrice() {
+  const id  = document.getElementById('manual-price-id').value;
+  const val = parseFloat(document.getElementById('manual-price-val').value);
+  if (!val || val <= 0) { toast('Please enter a valid price.', 'error'); return; }
+  const idx = cards.findIndex(c => c.id === id);
+  if (idx < 0) return;
+  const now     = Date.now();
+  const history = [...(cards[idx].priceHistory || [])];
+  const last    = history[history.length - 1];
+  if (!last || !isSameDay(last.date, now)) {
+    history.push({ date: now, value: val });
+  } else {
+    history[history.length - 1] = { date: now, value: val };
+  }
+  const res = await fetch('/api/cards/' + id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentValue: val, lastUpdated: now, priceHistory: history }),
+  });
+  if (!res.ok) { toast('Failed to save price.', 'error'); return; }
+  cards[idx] = { ...cards[idx], currentValue: val, lastUpdated: now, priceHistory: history };
+  closeManualPriceModal();
+  render();
+  toast('Price updated manually.', 'success');
+}
+
+// ── Filters & search ──────────────────────────────────────────────────────
+function applyFilter() {
+  activeTypeFilter   = document.getElementById('filter-type').value;
+  activeSetFilter    = document.getElementById('filter-set').value;
+  activeMoversFilter = document.getElementById('filter-movers').value;
+  render();
+}
+
+function applySearch() {
+  searchQuery = document.getElementById('search-input').value.trim().toLowerCase();
+  render();
+}
+
+function getFilteredCards() {
+  let filtered = cards.filter(c => !c.sold);
+  if (searchQuery) {
+    filtered = filtered.filter(c =>
+      c.name.toLowerCase().includes(searchQuery) ||
+      (c.set || '').toLowerCase().includes(searchQuery)
+    );
+  }
+  if (activeTypeFilter) filtered = filtered.filter(c => c.type === activeTypeFilter);
+  if (activeSetFilter)  filtered = filtered.filter(c => c.set  === activeSetFilter);
+  if (activeMoversFilter) {
+    const priced = filtered.filter(c => c.currentValue != null);
+    const sorted = [...priced].sort((a, b) => {
+      const aPct = (Number(a.currentValue) - Number(a.purchasePrice)) / Number(a.purchasePrice);
+      const bPct = (Number(b.currentValue) - Number(b.purchasePrice)) / Number(b.purchasePrice);
+      return bPct - aPct;
+    });
+    if (activeMoversFilter === 'gainers') filtered = sorted.slice(0, 5);
+    else if (activeMoversFilter === 'losers') filtered = sorted.slice(-5).reverse();
+  }
+  return filtered;
+}
+
+// ── Sort ──────────────────────────────────────────────────────────────────
+function sortBy(col) {
+  sortDir = sortCol === col ? -sortDir : 1;
+  sortCol = col;
+  render();
+}
+
+function getSortedCards(list) {
+  if (!sortCol) return list;
+  return [...list].sort((a, b) => {
+    let aVal, bVal;
+    switch (sortCol) {
+      case 'name':          aVal = a.name.toLowerCase();            bVal = b.name.toLowerCase();            break;
+      case 'set':           aVal = (a.set || '').toLowerCase();     bVal = (b.set || '').toLowerCase();     break;
+      case 'purchasePrice': aVal = Number(a.purchasePrice);         bVal = Number(b.purchasePrice);         break;
+      case 'currentValue':  aVal = Number(a.currentValue  || 0);    bVal = Number(b.currentValue  || 0);    break;
+      case 'profit':
+        aVal = a.currentValue != null ? Number(a.currentValue) - Number(a.purchasePrice) : -Infinity;
+        bVal = b.currentValue != null ? Number(b.currentValue) - Number(b.purchasePrice) : -Infinity;
+        break;
+      case 'lastUpdated':   aVal = a.lastUpdated || 0;              bVal = b.lastUpdated || 0;              break;
+      default: return 0;
+    }
+    if (aVal < bVal) return -1 * sortDir;
+    if (aVal > bVal) return  1 * sortDir;
+    return 0;
+  });
+}
+
+// ── CSV Export ────────────────────────────────────────────────────────────
+function exportCSV() {
+  const all = [...cards.filter(c => !c.sold), ...cards.filter(c => c.sold)];
+  if (all.length === 0) { toast('No cards to export.', 'info'); return; }
+
+  const headers = ['Name','Set','Type','Grade','Quantity','Purchase Price (SGD)','Current Value (SGD)','P/L (SGD)','Purchase Date','Target Price','Notes','Status','Sold Price','Sold Date','Sold To'];
+  const rows = all.map(c => {
+    const cost = Number(c.purchasePrice) * (c.quantity || 1);
+    const val  = c.sold
+      ? Number(c.soldPrice || 0) * (c.quantity || 1)
+      : (c.currentValue != null ? Number(c.currentValue) * (c.quantity || 1) : '');
+    const pl   = c.sold
+      ? ((Number(c.soldPrice || 0) - Number(c.purchasePrice)) * (c.quantity || 1)).toFixed(2)
+      : (c.currentValue != null ? ((Number(c.currentValue) - Number(c.purchasePrice)) * (c.quantity || 1)).toFixed(2) : '');
+    return [
+      c.name, c.set || '', c.type || '', c.grade || '', c.quantity || 1,
+      cost.toFixed(2), val !== '' ? Number(val).toFixed(2) : '', pl,
+      c.purchaseDate || '', c.targetPrice || '', c.notes || '',
+      c.sold ? 'Sold' : 'Active',
+      c.sold ? (c.soldPrice || '') : '',
+      c.sold ? (c.soldDate  || '') : '',
+      c.sold ? (c.soldTo    || '') : '',
+    ].map(v => '"' + String(v).replace(/"/g, '""') + '"');
+  });
+
+  const csv  = [headers.map(h => '"' + h + '"').join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'), { href: url, download: 'pokevault-' + new Date().toISOString().split('T')[0] + '.csv' });
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Collection exported.', 'success');
+}
+
+// ── TCG API helpers ───────────────────────────────────────────────────────
+/**
+ * Build a sanitised query term for the Pokemon TCG API.
+ * Handles apostrophes in names like "Misty's Psyduck" correctly,
+ * and supports promo-variant lookups.
+ */
+function sanitiseName(name) {
+  // Remove everything after the first '(' so variant suffixes don't break the API query
+  const base = name.replace(/\s*\(.*$/, '').trim();
+  // Escape apostrophes by removing them (the API uses them as query syntax)
+  return base.replace(/'/g, '').replace(/"/g, '').trim();
+}
+
+function sanitiseSet(set) {
+  return (set || '').replace(/'/g, '').replace(/"/g, '').trim();
+}
+
+/**
+ * Extract a variant hint from the stored card name.
+ * e.g. "Charmander (Pokemon Center)" => "Pokemon Center"
+ *      "Charmander (086/197)"         => "086/197"
+ */
+function extractVariant(name) {
+  const m = name.match(/\(([^)]+)\)/);
+  return m ? m[1].trim() : null;
+}
+
+/**
+ * Score a TCG API result against a stored card, taking into account
+ * the set name, card number / variant, and promo hints.
+ */
+function scoreResult(result, card) {
+  const cardNameLower = sanitiseName(card.name).toLowerCase();
+  const cardSetLower  = sanitiseSet(card.set).toLowerCase();
+  const variant       = extractVariant(card.name);
+  const rSetLower     = (result.set?.name || '').toLowerCase();
+  const rNum          = (result.number   || '').toLowerCase();
+  let score = 0;
+
+  // Name match
+  if (result.name?.toLowerCase() === cardNameLower) score += 10;
+  else if (result.name?.toLowerCase().includes(cardNameLower)) score += 4;
+
+  // Set match
+  if (cardSetLower) {
+    if (rSetLower === cardSetLower)                                        score += 6;
+    else if (rSetLower.includes(cardSetLower) || cardSetLower.includes(rSetLower)) score += 3;
+    const firstWord = cardSetLower.split(' ')[0];
+    if (firstWord.length > 2 && rSetLower.includes(firstWord))            score += 1;
+  }
+
+  // Variant / promo number match (e.g. "086/197" or "Pokemon Center")
+  if (variant) {
+    const varLower = variant.toLowerCase();
+    if (rNum && rNum === varLower)                                         score += 8;
+    else if (rNum && rNum.includes(varLower))                             score += 4;
+    // Promo flavour text in set name (e.g. "Pokemon Center")
+    if (rSetLower.includes(varLower))                                     score += 5;
+  }
+
+  return score;
+}
+
+const PRICE_KEY_ORDER = ['holofoil','1stEditionHolofoil','normal','reverseHolofoil','unlimited','1stEdition'];
+
+function extractPrice(prices) {
+  if (!prices) return null;
+  for (const key of PRICE_KEY_ORDER) {
+    if (prices[key]?.market) return prices[key].market;
+  }
+  for (const key of Object.keys(prices)) {
+    if (prices[key]?.market) return prices[key].market;
+  }
+  return null;
+}
+
+function applyGradeMultiplier(baseUSD, grade) {
+  const g = (grade || 'raw').toLowerCase();
+  if (g === 'psa 10' || g === 'bgs 10')   return baseUSD * 3.5;
+  if (g === 'psa 9'  || g === 'bgs 9.5')  return baseUSD * 1.5;
+  if (g === 'psa 8'  || g === 'bgs 9')    return baseUSD * 1.2;
+  if (g === 'psa 7')                       return baseUSD * 1.05;
+  return baseUSD;
+}
+
+/**
+ * Query the Pokemon TCG API.
+ * Tries three strategies in order:
+ *   1. name + full set name (exact)
+ *   2. name + first word of set name (wildcard)
+ *   3. name only (broadest)
+ */
+async function queryTCG(namePart, setSanitized, fields = 'name,set,number,tcgplayer') {
+  const base = 'https://api.pokemontcg.io/v2/cards';
+  const queries = [];
+
+  if (setSanitized) {
+    queries.push(`name:"${namePart}" set.name:"${setSanitized}"`);
+    const firstWord = setSanitized.split(' ')[0];
+    if (firstWord.length > 2) {
+      queries.push(`name:"${namePart}" set.name:${firstWord}*`);
+    }
+  }
+  queries.push(`name:"${namePart}"`);
+
+  for (const q of queries) {
+    const url = `${base}?q=${encodeURIComponent(q)}&select=${fields}&orderBy=-set.releaseDate&pageSize=30`;
+    try {
+      const res  = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.data?.length) return data.data;
+    } catch { /* continue to next query */ }
+  }
+  return [];
+}
+
+// ── Price fetching ────────────────────────────────────────────────────────
+async function fetchPrice(card) {
+  try {
+    const namePart    = sanitiseName(card.name);
+    const setSanitized = sanitiseSet(card.set);
+    const results     = await queryTCG(namePart, setSanitized, 'name,set,number,tcgplayer');
+    if (!results.length) return null;
+
+    const scored = results
+      .map(r => ({ ...r, _score: scoreResult(r, card) }))
+      .sort((a, b) => b._score - a._score);
+
+    for (const match of scored) {
+      const base = extractPrice(match.tcgplayer?.prices);
+      if (base == null) continue;
+      const priceUSD = applyGradeMultiplier(base, card.grade);
+      return Math.round(priceUSD * USD_TO_SGD * 100) / 100;
+    }
+    return null;
+  } catch (e) {
+    console.error('fetchPrice error for ' + card.name, e);
+    return null;
+  }
+}
+
+async function refreshPrices(silent = false) {
+  const active = cards.filter(c => !c.sold);
+  if (active.length === 0) { if (!silent) toast('No cards to refresh.', 'info'); return; }
+  const btn     = document.querySelector('.btn-refresh');
+  btn.disabled  = true;
+  btn.textContent = '↻ Fetching…';
+  let updated   = 0;
+
+  for (let i = 0; i < active.length; i++) {
+    try {
+      const price = await fetchPrice(active[i]);
+      if (price != null) {
+        const now = Date.now();
+        const idx = cards.findIndex(c => c.id === active[i].id);
+        if (idx < 0) continue;
+        const history = [...(cards[idx].priceHistory || [])];
+        const last    = history[history.length - 1];
+        if (!last || !isSameDay(last.date, now)) history.push({ date: now, value: price });
+        else history[history.length - 1] = { date: now, value: price };
+
+        cards[idx] = { ...cards[idx], currentValue: price, lastUpdated: now, priceHistory: history };
+        await fetch('/api/cards/' + cards[idx].id, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentValue: price, lastUpdated: now, priceHistory: history }),
+        });
+        updated++;
+      }
+    } catch (e) {
+      console.error('Refresh failed for ' + active[i].name, e);
+    }
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  localStorage.setItem('lastRefresh', Date.now().toString());
+  render();
+  const el = document.getElementById('last-updated');
+  if (el) el.textContent = 'Last refreshed: ' + new Date().toLocaleString('en-SG') + ' · USD/SGD: ' + USD_TO_SGD.toFixed(4);
+  btn.disabled    = false;
+  btn.textContent = '↻ Refresh prices';
+  if (!silent) {
+    if (updated > 0) toast('Updated ' + updated + ' card' + (updated !== 1 ? 's' : '') + '.', 'success');
+    else toast('No prices found. Try setting values manually.', 'error');
+  }
+}
+
+// ── Card image fetching ───────────────────────────────────────────────────
+async function fetchCardImage(card) {
+  try {
+    const namePart     = sanitiseName(card.name);
+    const setSanitized = sanitiseSet(card.set);
+    const results      = await queryTCG(namePart, setSanitized, 'name,set,number,images');
+    if (!results.length) return null;
+
+    const scored = results
+      .map(r => ({ ...r, _score: scoreResult(r, card) }))
+      .sort((a, b) => b._score - a._score);
+
+    for (const match of scored) {
+      const img = match.images?.large || match.images?.small;
+      if (img) return img;
+    }
+    return null;
+  } catch (e) {
+    console.warn('fetchCardImage error:', e);
+    return null;
+  }
+}
+
+// ── Modal image tab ───────────────────────────────────────────────────────
+function switchModalTab(tab) {
+  document.getElementById('modal-panel-info').style.display  = tab === 'info'  ? 'block' : 'none';
+  document.getElementById('modal-panel-image').style.display = tab === 'image' ? 'block' : 'none';
+  document.getElementById('modal-tab-info').classList.toggle('active',  tab === 'info');
+  document.getElementById('modal-tab-image').classList.toggle('active', tab === 'image');
+  if (tab === 'image') _showImageTab();
+}
+
+function _showImageTab() {
+  const loadingEl  = document.getElementById('modal-image-loading');
+  const foundEl    = document.getElementById('modal-image-found');
+  const notFoundEl = document.getElementById('modal-image-notfound');
+  const largeImg   = document.getElementById('modal-card-image-large');
+
+  if (_currentCardImageLoaded && _currentCardImageUrl) {
+    loadingEl.style.display  = 'none';
+    foundEl.style.display    = 'block';
+    notFoundEl.style.display = 'none';
+    if (largeImg.src !== _currentCardImageUrl) largeImg.src = _currentCardImageUrl;
+  } else if (_currentCardImageLoaded && !_currentCardImageUrl) {
+    loadingEl.style.display  = 'none';
+    foundEl.style.display    = 'none';
+    notFoundEl.style.display = 'flex';
+  } else {
+    loadingEl.style.display  = 'flex';
+    foundEl.style.display    = 'none';
+    notFoundEl.style.display = 'none';
+  }
+}
+
+// ── Card detail modal ─────────────────────────────────────────────────────
+async function openCard(id) {
+  const card = cards.find(c => c.id === id);
+  if (!card) return;
+  editingCardId = id;
+  _currentCardImageUrl    = null;
+  _currentCardImageLoaded = false;
+
+  const cost   = Number(card.purchasePrice);
+  const val    = card.currentValue != null ? Number(card.currentValue) : null;
+  const profit = val != null ? (val - cost) * (card.quantity || 1) : null;
+  const colors = getTypeColor(card.type);
+
+  const typeBar = document.getElementById('modal-type-bar');
+  if (typeBar) typeBar.style.background = colors.border;
+
+  document.getElementById('modal-name').textContent = card.name + (card.quantity > 1 ? ' ×' + card.quantity : '');
+  document.getElementById('modal-meta').textContent = (card.set || 'Unknown set') + (card.type ? ' · ' + card.type : '');
+
+  const gradeEl       = document.getElementById('modal-grade');
+  gradeEl.textContent = card.grade;
+  gradeEl.className   = 'badge ' + (card.grade === 'raw' ? 'badge-raw' : 'badge-psa');
+
+  document.getElementById('modal-cost').textContent  = 'SGD $' + (cost * (card.quantity || 1)).toFixed(2);
+  document.getElementById('modal-value').textContent = val != null ? 'SGD $' + (val * (card.quantity || 1)).toFixed(2) : '—';
+
+  const profitEl = document.getElementById('modal-profit');
+  if (profit != null) {
+    profitEl.textContent = (profit >= 0 ? '↑ +' : '↓ ') + 'SGD $' + Math.abs(profit).toFixed(2);
+    profitEl.className   = 'modal-stat-value ' + (profit >= 0 ? 'profit-pos' : 'profit-neg');
+  } else {
+    profitEl.textContent = '—';
+    profitEl.className   = 'modal-stat-value';
+  }
+
+  document.getElementById('modal-updated').textContent       = card.lastUpdated ? new Date(card.lastUpdated).toLocaleDateString('en-SG') : '—';
+  document.getElementById('modal-purchase-date').textContent = card.purchaseDate || '—';
+
+  const targetEl = document.getElementById('modal-target');
+  if (card.targetPrice) {
+    const hit = val != null && val >= card.targetPrice;
+    targetEl.textContent = 'SGD $' + Number(card.targetPrice).toFixed(2) + (hit ? ' ✓ Target reached!' : '');
+    targetEl.style.color = hit ? 'var(--green)' : '';
+  } else {
+    targetEl.textContent = '—';
+    targetEl.style.color = '';
+  }
+
+  const notesWrap = document.getElementById('modal-notes-wrap');
+  if (card.notes) {
+    notesWrap.style.display = 'block';
+    document.getElementById('modal-notes').textContent = card.notes;
+  } else {
+    notesWrap.style.display = 'none';
+  }
+
+  document.getElementById('modal-image-caption').textContent = card.name + (card.set ? ' — ' + card.set : '');
+
+  switchModalTab('info');
+  document.getElementById('modal-overlay').classList.add('active');
+
+  // Fetch image asynchronously
+  fetchCardImage(card).then(imgUrl => {
+    _currentCardImageUrl    = imgUrl || null;
+    _currentCardImageLoaded = true;
+    const imagePanel = document.getElementById('modal-panel-image');
+    if (imagePanel?.style.display !== 'none') _showImageTab();
+  });
+
+  // Price history chart
+  const history        = card.priceHistory || [];
+  const emptyEl        = document.getElementById('modal-chart-empty');
+  const chartContainer = document.querySelector('.modal-chart-container');
+
+  if (history.length < 2) {
+    emptyEl.style.display       = 'block';
+    chartContainer.style.display = 'none';
+  } else {
+    emptyEl.style.display       = 'none';
+    chartContainer.style.display = 'block';
+    const labels = history.map(p => new Date(p.date).toLocaleDateString('en-SG'));
+    const values = history.map(p => p.value);
+    if (priceChart) { priceChart.destroy(); priceChart = null; }
+    const ctx = document.getElementById('price-chart').getContext('2d');
+    priceChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Value (SGD)',
+          data: values,
+          borderColor: colors.chart,
+          backgroundColor: colors.bg,
+          borderWidth: 2,
+          pointRadius: 4,
+          pointBackgroundColor: colors.chart,
+          pointBorderColor: 'var(--bg2)',
+          pointBorderWidth: 2,
+          tension: 0.4,
+          fill: true,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'var(--bg3)',
+            borderColor: 'var(--border2)',
+            borderWidth: 1,
+            titleColor: 'var(--text2)',
+            bodyColor: 'var(--text)',
+            callbacks: { label: ctx => 'SGD $' + Number(ctx.raw).toFixed(2) },
+          },
+        },
+        scales: {
+          y: { ticks: { callback: v => '$' + v, font: { size: 11, family: 'DM Mono' }, color: 'var(--text3)' }, grid: { color: 'var(--border)' }, border: { display: false } },
+          x: { ticks: { font: { size: 11, family: 'DM Mono' }, color: 'var(--text3)' }, grid: { display: false }, border: { display: false } },
+        },
+      },
+    });
+  }
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modal-overlay')) return;
+  document.getElementById('modal-overlay').classList.remove('active');
+  if (priceChart) { priceChart.destroy(); priceChart = null; }
+  _currentCardImageUrl    = null;
+  _currentCardImageLoaded = false;
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  ['modal-overlay','confirm-overlay','edit-overlay','sell-overlay','manual-price-overlay'].forEach(id => {
+    document.getElementById(id)?.classList.remove('active');
+  });
+  if (priceChart) { priceChart.destroy(); priceChart = null; }
+});
+
+// ── Movers ────────────────────────────────────────────────────────────────
+function renderMovers() {
+  const priced = cards.filter(c => !c.sold && c.currentValue != null);
+  const section = document.getElementById('movers-section');
+  if (priced.length < 2) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+
+  const sorted = [...priced].sort((a, b) => {
+    const aPct = (Number(a.currentValue) - Number(a.purchasePrice)) / Number(a.purchasePrice);
+    const bPct = (Number(b.currentValue) - Number(b.purchasePrice)) / Number(b.purchasePrice);
+    return bPct - aPct;
+  });
+
+  const moverCard = c => {
+    const profit = Number(c.currentValue) - Number(c.purchasePrice);
+    const pct    = (profit / Number(c.purchasePrice)) * 100;
+    const pos    = profit >= 0;
+    const colors = getTypeColor(c.type);
+    return '<div class="mover-card" style="border-left:3px solid ' + colors.border + ';" onclick="openCard(\'' + c.id + '\')">' +
+      '<div style="overflow:hidden;"><div class="mover-name">' + esc(c.name) + '</div><div class="mover-set">' + esc(c.set || '—') + '</div></div>' +
+      '<div class="mover-value ' + (pos ? 'profit-pos' : 'profit-neg') + '">' +
+        (pos ? '↑' : '↓') + ' ' + Math.abs(pct).toFixed(1) + '%' +
+        '<span class="mover-sgd">' + (pos ? '+' : '-') + 'SGD $' + Math.abs(profit).toFixed(2) + '</span>' +
+      '</div></div>';
+  };
+
+  document.getElementById('movers-gainers').innerHTML = sorted.slice(0, 3).map(moverCard).join('');
+  document.getElementById('movers-losers').innerHTML  = sorted.slice(-3).reverse().map(moverCard).join('');
+}
+
+function checkTargetAlerts() {
+  cards
+    .filter(c => !c.sold && c.targetPrice && c.currentValue != null && Number(c.currentValue) >= Number(c.targetPrice))
+    .forEach(c => toast('🎯 ' + c.name + ' hit your target of SGD $' + Number(c.targetPrice).toFixed(2) + '!', 'success'));
+}
+
+// ── Summary ───────────────────────────────────────────────────────────────
+function updateSummary() {
+  const active   = cards.filter(c => !c.sold);
+  const sold     = cards.filter(c =>  c.sold);
+  const count    = active.reduce((s, c) => s + (c.quantity || 1), 0);
+  const cost     = active.reduce((s, c) => s + Number(c.purchasePrice) * (c.quantity || 1), 0);
+  const value    = active.reduce((s, c) => s + (c.currentValue != null ? Number(c.currentValue) : Number(c.purchasePrice)) * (c.quantity || 1), 0);
+  const profit   = value - cost;
+  const realised = sold.reduce((s, c) => s + (c.soldPrice ? (Number(c.soldPrice) - Number(c.purchasePrice)) * (c.quantity || 1) : 0), 0);
+
+  document.getElementById('s-count').textContent = count;
+  animateValue(document.getElementById('s-cost'),  cost,  'SGD ');
+  animateValue(document.getElementById('s-value'), value, 'SGD ');
+  const headerVal = document.getElementById('header-value');
+  if (headerVal) animateValue(headerVal, value, 'SGD ');
+
+  const pel = document.getElementById('s-profit');
+  pel.textContent = (profit >= 0 ? '↑ +SGD $' : '↓ -SGD $') + Math.abs(profit).toFixed(2);
+  pel.className   = 'metric-value ' + (profit >= 0 ? 'pos' : 'neg');
+
+  const rel = document.getElementById('s-realised');
+  rel.textContent = (realised >= 0 ? '+SGD $' : '-SGD $') + Math.abs(realised).toFixed(2);
+  rel.className   = 'metric-value ' + (realised >= 0 ? 'pos' : 'neg');
+
+  const profitCard = document.querySelector('.profit-card');
+  const profitIcon = document.getElementById('profit-icon');
+  profitCard?.classList.toggle('pos', profit >= 0);
+  profitCard?.classList.toggle('neg', profit  < 0);
+  if (profitIcon) profitIcon.textContent = profit >= 0 ? '💰' : '📉';
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+function render() {
+  populateSetFilter();
+  const tbody    = document.getElementById('card-table');
+  const cardList = document.getElementById('card-list');
+  const filtered = getFilteredCards();
+  const sorted   = getSortedCards(filtered);
+  const soldCards = cards.filter(c => c.sold);
+
+  // ── Active cards ──
+  if (cards.filter(c => !c.sold).length === 0) {
+    tbody.innerHTML    = '<tr><td colspan="11"><div class="empty-state">Your vault is empty — add your first card to get started</div></td></tr>';
+    cardList.innerHTML = '<div class="empty-state">Your vault is empty — add your first card to get started</div>';
+  } else if (sorted.length === 0) {
+    tbody.innerHTML    = '<tr><td colspan="11"><div class="empty-state">No cards match your filters</div></td></tr>';
+    cardList.innerHTML = '<div class="empty-state">No cards match your filters</div>';
+  } else {
+    tbody.innerHTML = sorted.map(c => {
+      const cost        = Number(c.purchasePrice) * (c.quantity || 1);
+      const val         = c.currentValue != null ? Number(c.currentValue) * (c.quantity || 1) : null;
+      const profit      = val != null ? val - cost : null;
+      const profitStr   = profit != null ? (profit >= 0 ? '↑ +' : '↓ ') + 'SGD $' + Math.abs(profit).toFixed(2) : '—';
+      const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
+      const gradeClass  = c.grade === 'raw' ? 'badge-raw' : 'badge-psa';
+      const updated     = c.lastUpdated ? new Date(c.lastUpdated).toLocaleDateString('en-SG') : '—';
+      const colors      = getTypeColor(c.type);
+      const typeBadge   = c.type
+        ? `<span class="type-badge" style="background:${colors.bg}; color:${colors.border}; border:1px solid ${colors.border};">${esc(c.type)}</span>`
+        : '<span class="type-badge type-unknown">—</span>';
+      const targetHit = c.targetPrice && c.currentValue != null && Number(c.currentValue) >= Number(c.targetPrice);
+      const rowStyle  = 'border-left:3px solid ' + colors.border + (targetHit ? '; box-shadow:inset 0 0 0 1px rgba(76,175,125,0.2);' : '') + ';';
+      return `<tr class="card-row${targetHit ? ' target-hit' : ''}" onclick="openCard('${c.id}')" style="${rowStyle}">` +
+        `<td title="${esc(c.name)}" style="font-weight:600;">${esc(c.name)}${targetHit ? ' <span style="color:var(--green);font-size:11px;">🎯</span>' : ''}</td>` +
+        `<td title="${esc(c.set || '—')}" style="color:var(--text2);">${esc(c.set || '—')}</td>` +
+        `<td>${typeBadge}</td>` +
+        `<td><span class="badge ${gradeClass}">${esc(c.grade)}</span></td>` +
+        `<td style="font-family:var(--font-mono); color:var(--text2);">×${c.quantity || 1}</td>` +
+        `<td style="font-family:var(--font-mono);">$${cost.toFixed(2)}</td>` +
+        `<td style="font-family:var(--font-mono);">${val != null ? '$' + val.toFixed(2) : '<span style="color:var(--text3);">—</span>'}</td>` +
+        `<td class="${profitClass}" style="font-family:var(--font-mono); font-weight:600;">${profitStr}</td>` +
+        `<td style="color:var(--text3); font-family:var(--font-mono); font-size:12px;">${updated}</td>` +
+        `<td><button class="btn-row-edit" onclick="event.stopPropagation(); openEditForm('${c.id}')" title="Edit">✎</button></td>` +
+        `<td><button class="del-btn" onclick="event.stopPropagation(); deleteCard('${c.id}')" title="Delete">✕</button></td>` +
+        '</tr>';
+    }).join('');
+
+    cardList.innerHTML = sorted.map(c => {
+      const cost        = Number(c.purchasePrice) * (c.quantity || 1);
+      const val         = c.currentValue != null ? Number(c.currentValue) * (c.quantity || 1) : null;
+      const profit      = val != null ? val - cost : null;
+      const profitStr   = profit != null ? (profit >= 0 ? '↑ +' : '↓ -') + 'SGD $' + Math.abs(profit).toFixed(2) : '—';
+      const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
+      const gradeClass  = c.grade === 'raw' ? 'badge-raw' : 'badge-psa';
+      const colors      = getTypeColor(c.type);
+      const targetHit   = c.targetPrice && c.currentValue != null && Number(c.currentValue) >= Number(c.targetPrice);
+      return `<div class="mobile-card${targetHit ? ' target-hit' : ''}" style="border-left:3px solid ${colors.border};" onclick="openCard('${c.id}')">` +
+        '<div class="mobile-card-top">' +
+          `<div><div class="mobile-card-name">${esc(c.name)}${targetHit ? ' 🎯' : ''}</div>` +
+          `<div class="mobile-card-set">${esc(c.set || '—')} · <span class="badge ${gradeClass}">${esc(c.grade)}</span>${c.quantity > 1 ? ' ×' + c.quantity : ''}</div></div>` +
+          '<div style="display:flex;gap:8px;align-items:center;">' +
+            `<button class="mobile-card-delete" onclick="event.stopPropagation(); openEditForm('${c.id}')" title="Edit" style="font-size:14px;">✎</button>` +
+            `<button class="mobile-card-delete" onclick="event.stopPropagation(); deleteCard('${c.id}')" title="Delete">✕</button>` +
+          '</div>' +
+        '</div>' +
+        '<div class="mobile-card-bottom">' +
+          `<div class="mobile-card-price">Paid: SGD $${cost.toFixed(2)}<br>Value: ${fmt(val)}</div>` +
+          `<div class="mobile-card-profit ${profitClass}">${profitStr}</div>` +
+        '</div></div>';
+    }).join('');
+  }
+
+  // ── Sold cards ──
+  const soldTbody = document.getElementById('sold-table');
+  const soldList  = document.getElementById('sold-list');
+  if (soldCards.length === 0) {
+    soldTbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">No sold cards yet</div></td></tr>';
+    soldList.innerHTML  = '<div class="empty-state">No sold cards yet</div>';
+  } else {
+    soldTbody.innerHTML = soldCards.map(c => {
+      const profit      = c.soldPrice ? (Number(c.soldPrice) - Number(c.purchasePrice)) * (c.quantity || 1) : null;
+      const profitStr   = profit != null ? (profit >= 0 ? '↑ +' : '↓ ') + 'SGD $' + Math.abs(profit).toFixed(2) : '—';
+      const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
+      return '<tr>' +
+        `<td style="font-weight:600;">${esc(c.name)}</td>` +
+        `<td style="color:var(--text2);">${esc(c.set || '—')}</td>` +
+        `<td><span class="badge ${c.grade === 'raw' ? 'badge-raw' : 'badge-psa'}">${esc(c.grade)}</span></td>` +
+        `<td style="font-family:var(--font-mono);">$${(Number(c.purchasePrice) * (c.quantity || 1)).toFixed(2)}</td>` +
+        `<td style="font-family:var(--font-mono);">${c.soldPrice ? '$' + Number(c.soldPrice).toFixed(2) : '—'}</td>` +
+        `<td class="${profitClass}" style="font-family:var(--font-mono); font-weight:600;">${profitStr}</td>` +
+        `<td style="color:var(--text3); font-family:var(--font-mono); font-size:12px;">${c.soldDate || '—'}</td>` +
+        `<td style="color:var(--text2); font-size:12px;">${esc(c.soldTo || '—')}</td>` +
+        `<td><button class="del-btn" onclick="deleteCard('${c.id}')" title="Delete">✕</button></td>` +
+        '</tr>';
+    }).join('');
+
+    soldList.innerHTML = soldCards.map(c => {
+      const profit      = c.soldPrice ? (Number(c.soldPrice) - Number(c.purchasePrice)) * (c.quantity || 1) : null;
+      const profitStr   = profit != null ? (profit >= 0 ? '+' : '') + 'SGD $' + profit.toFixed(2) : '—';
+      const profitClass = profit == null ? '' : profit >= 0 ? 'profit-pos' : 'profit-neg';
+      return '<div class="mobile-card">' +
+        '<div class="mobile-card-top">' +
+          `<div><div class="mobile-card-name">${esc(c.name)}</div>` +
+          `<div class="mobile-card-set">${esc(c.set || '—')} · sold ${c.soldDate || '—'}</div></div>` +
+        '</div>' +
+        '<div class="mobile-card-bottom">' +
+          `<div class="mobile-card-price">Paid: SGD $${Number(c.purchasePrice).toFixed(2)}<br>Sold: ${c.soldPrice ? 'SGD $' + Number(c.soldPrice).toFixed(2) : '—'}</div>` +
+          `<div class="mobile-card-profit ${profitClass}">${profitStr}</div>` +
+        '</div></div>';
+    }).join('');
+  }
+
+  updateSummary();
+  renderMovers();
+  checkTargetAlerts();
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────
+init();
