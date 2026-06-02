@@ -1,8 +1,8 @@
 'use strict';
 
-const express        = require('express');
-const session        = require('express-session');
-const bcrypt         = require('bcryptjs');
+const express = require('express');
+const session = require('express-session');
+const bcrypt  = require('bcryptjs');
 const { createClient } = require('@supabase/supabase-js');
 
 // ── Supabase ──────────────────────────────────────────────────────────────
@@ -10,27 +10,25 @@ const SUPABASE_URL = 'https://kilkeuaeusfqsobhxlou.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpbGtldWFldXNmcXNvYmh4bG91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMjYyNjEsImV4cCI6MjA5NTYwMjI2MX0.Gph5uSVo45L7__58vRZz-KaVrs8o6RSdnQusY2csJTw';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ── App setup ─────────────────────────────────────────────────────────────
+// ── App ───────────────────────────────────────────────────────────────────
 const app = express();
 
 app.use(express.json());
 app.use(session({
-  secret: 'pokevault-secret-key-v3',
+  secret: 'pokevault-secret-key-v4',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 }
+  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 },
 }));
 
-// ── Middleware ────────────────────────────────────────────────────────────
+// ── Auth middleware ───────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: 'Not logged in' });
-  }
+  if (!req.session.userId) return res.status(401).json({ error: 'Not logged in' });
   next();
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-function dbCardToClient(c) {
+// ── DB ↔ Client shape ─────────────────────────────────────────────────────
+function toClient(c) {
   return {
     id:            c.id,
     name:          c.name,
@@ -56,25 +54,19 @@ function dbCardToClient(c) {
 // ── Auth routes ───────────────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
-  if (!username?.trim() || !password) {
+  if (!username?.trim() || !password)
     return res.status(400).json({ error: 'Username and password required' });
-  }
+
   const { data: existing } = await supabase
-    .from('users')
-    .select('id')
-    .ilike('username', username.trim())
-    .single();
-  if (existing) {
-    return res.status(400).json({ error: 'Username already taken' });
-  }
+    .from('users').select('id').ilike('username', username.trim()).single();
+  if (existing) return res.status(400).json({ error: 'Username already taken' });
+
   const hash = await bcrypt.hash(password, 10);
   const id   = Date.now().toString();
-  const { error } = await supabase
-    .from('users')
+  const { error } = await supabase.from('users')
     .insert([{ id, username: username.trim(), password: hash }]);
-  if (error) {
-    return res.status(500).json({ error: 'Failed to create account' });
-  }
+  if (error) return res.status(500).json({ error: 'Failed to create account' });
+
   req.session.userId   = id;
   req.session.username = username.trim();
   res.json({ username: username.trim() });
@@ -82,17 +74,14 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
-  if (!username || !password) {
+  if (!username || !password)
     return res.status(400).json({ error: 'Username and password required' });
-  }
+
   const { data: user } = await supabase
-    .from('users')
-    .select('*')
-    .ilike('username', username)
-    .single();
-  if (!user || !(await bcrypt.compare(password, user.password))) {
+    .from('users').select('*').ilike('username', username).single();
+  if (!user || !(await bcrypt.compare(password, user.password)))
     return res.status(401).json({ error: 'Invalid username or password' });
-  }
+
   req.session.userId   = user.id;
   req.session.username = user.username;
   res.json({ username: user.username });
@@ -103,21 +92,18 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.get('/api/me', (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: 'Not logged in' });
-  }
+  if (!req.session.userId) return res.status(401).json({ error: 'Not logged in' });
   res.json({ username: req.session.username });
 });
 
 // ── Card routes ───────────────────────────────────────────────────────────
 app.get('/api/cards', requireAuth, async (req, res) => {
   const { data, error } = await supabase
-    .from('cards')
-    .select('*')
+    .from('cards').select('*')
     .eq('user_id', req.session.userId)
     .order('id', { ascending: true });
   if (error) return res.status(500).json({ error: 'Failed to fetch cards' });
-  res.json(data.map(dbCardToClient));
+  res.json(data.map(toClient));
 });
 
 app.post('/api/cards', requireAuth, async (req, res) => {
@@ -126,7 +112,7 @@ app.post('/api/cards', requireAuth, async (req, res) => {
     purchaseDate, targetPrice, notes, currentValue,
     lastUpdated, url, priceHistory,
   } = req.body;
-  const id = Date.now().toString();
+  const id     = Date.now().toString();
   const record = {
     id,
     user_id:        req.session.userId,
@@ -147,66 +133,47 @@ app.post('/api/cards', requireAuth, async (req, res) => {
   };
   const { error } = await supabase.from('cards').insert([record]);
   if (error) return res.status(500).json({ error: 'Failed to save card' });
-  res.json(dbCardToClient({ ...record, sold: false }));
+  res.json(toClient({ ...record, sold: false }));
 });
 
-// Full value update (price refresh)
+// Price / history update
 app.put('/api/cards/:id', requireAuth, async (req, res) => {
   const { currentValue, lastUpdated, priceHistory } = req.body;
-  const { error } = await supabase
-    .from('cards')
+  const { error } = await supabase.from('cards')
     .update({ current_value: currentValue, last_updated: lastUpdated, price_history: priceHistory })
-    .eq('id', req.params.id)
-    .eq('user_id', req.session.userId);
+    .eq('id', req.params.id).eq('user_id', req.session.userId);
   if (error) return res.status(500).json({ error: 'Failed to update card' });
   res.json({ ok: true });
 });
 
 // Partial update (edit / sell)
 app.patch('/api/cards/:id', requireAuth, async (req, res) => {
-  const allowed = {
-    name:          'name',
-    set:           'set_name',
-    type:          'type',
-    grade:         'grade',
-    quantity:      'quantity',
-    purchasePrice: 'purchase_price',
-    purchaseDate:  'purchase_date',
-    targetPrice:   'target_price',
-    notes:         'notes',
-    url:           'url',
-    sold:          'sold',
-    soldPrice:     'sold_price',
-    soldDate:      'sold_date',
-    soldTo:        'sold_to',
+  const fieldMap = {
+    name: 'name', set: 'set_name', type: 'type', grade: 'grade',
+    quantity: 'quantity', purchasePrice: 'purchase_price', purchaseDate: 'purchase_date',
+    targetPrice: 'target_price', notes: 'notes', url: 'url',
+    sold: 'sold', soldPrice: 'sold_price', soldDate: 'sold_date', soldTo: 'sold_to',
   };
   const update = {};
-  for (const [clientKey, dbKey] of Object.entries(allowed)) {
-    if (req.body[clientKey] !== undefined) update[dbKey] = req.body[clientKey];
+  for (const [k, v] of Object.entries(fieldMap)) {
+    if (req.body[k] !== undefined) update[v] = req.body[k];
   }
-  if (Object.keys(update).length === 0) {
+  if (!Object.keys(update).length)
     return res.status(400).json({ error: 'No fields to update' });
-  }
-  const { error } = await supabase
-    .from('cards')
-    .update(update)
-    .eq('id', req.params.id)
-    .eq('user_id', req.session.userId);
+
+  const { error } = await supabase.from('cards')
+    .update(update).eq('id', req.params.id).eq('user_id', req.session.userId);
   if (error) return res.status(500).json({ error: 'Failed to update card' });
   res.json({ ok: true });
 });
 
 app.delete('/api/cards/:id', requireAuth, async (req, res) => {
-  const { error } = await supabase
-    .from('cards')
-    .delete()
-    .eq('id', req.params.id)
-    .eq('user_id', req.session.userId);
+  const { error } = await supabase.from('cards')
+    .delete().eq('id', req.params.id).eq('user_id', req.session.userId);
   if (error) return res.status(500).json({ error: 'Failed to delete card' });
   res.json({ ok: true });
 });
 
-// ── Static files ──────────────────────────────────────────────────────────
+// ── Static ────────────────────────────────────────────────────────────────
 app.use(express.static('.'));
-
-app.listen(5000, () => console.log('PokeVault v3 running on port 5000'));
+app.listen(5000, () => console.log('PokeVault v4 running on :5000'));
