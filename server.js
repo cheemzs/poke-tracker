@@ -22,6 +22,7 @@ function requireAuth(req, res, next) {
   next();
 }
 
+// ── Auth ──────────────────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
@@ -57,6 +58,7 @@ app.get('/api/me', (req, res) => {
   res.json({ username: req.session.username });
 });
 
+// ── Cards ─────────────────────────────────────────────────────────────
 app.get('/api/cards', requireAuth, async (req, res) => {
   const { data, error } = await supabase
     .from('cards')
@@ -126,20 +128,20 @@ app.put('/api/cards/:id', requireAuth, async (req, res) => {
 app.patch('/api/cards/:id', requireAuth, async (req, res) => {
   const { name, set, type, grade, quantity, purchasePrice, purchaseDate, targetPrice, notes, url, sold, soldPrice, soldDate, soldTo } = req.body;
   const update = {};
-  if (name !== undefined) update.name = name;
-  if (set !== undefined) update.set_name = set;
-  if (type !== undefined) update.type = type;
-  if (grade !== undefined) update.grade = grade;
-  if (quantity !== undefined) update.quantity = quantity;
+  if (name !== undefined)          update.name = name;
+  if (set !== undefined)           update.set_name = set;
+  if (type !== undefined)          update.type = type;
+  if (grade !== undefined)         update.grade = grade;
+  if (quantity !== undefined)      update.quantity = quantity;
   if (purchasePrice !== undefined) update.purchase_price = purchasePrice;
-  if (purchaseDate !== undefined) update.purchase_date = purchaseDate;
-  if (targetPrice !== undefined) update.target_price = targetPrice;
-  if (notes !== undefined) update.notes = notes;
-  if (url !== undefined) update.url = url;
-  if (sold !== undefined) update.sold = sold;
-  if (soldPrice !== undefined) update.sold_price = soldPrice;
-  if (soldDate !== undefined) update.sold_date = soldDate;
-  if (soldTo !== undefined) update.sold_to = soldTo;
+  if (purchaseDate !== undefined)  update.purchase_date = purchaseDate;
+  if (targetPrice !== undefined)   update.target_price = targetPrice;
+  if (notes !== undefined)         update.notes = notes;
+  if (url !== undefined)           update.url = url;
+  if (sold !== undefined)          update.sold = sold;
+  if (soldPrice !== undefined)     update.sold_price = soldPrice;
+  if (soldDate !== undefined)      update.sold_date = soldDate;
+  if (soldTo !== undefined)        update.sold_to = soldTo;
   const { error } = await supabase.from('cards').update(update)
     .eq('id', req.params.id).eq('user_id', req.session.userId);
   if (error) return res.status(500).json({ error: 'Failed to update card' });
@@ -153,5 +155,7 @@ app.delete('/api/cards/:id', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Static ────────────────────────────────────────────────────────────
 app.use(express.static('.'));
-app.listen(5000, () => console.log('Running on port 5000'));
+
+app.listen(5000, () => console.log('PokeVault running on port 5000'));
