@@ -426,8 +426,60 @@ function exportCSV() {
   toast('Collection exported.', 'success');
 }
 
+// ── Card image fetching ──────────────────────────────────────────────
+async function fetchCardImage(card) {
+  try {
+    const namePart = card.name.replace(/['"]/g, '').trim();
+
+    // Stage 1: exact name + set
+    if (card.set) {
+      const setSanitized = card.set.replace(/['"]/g, '').trim();
+      const q1 = `name:"${namePart}" set.name:"${setSanitized}"`;
+      const url1 = 'https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(q1) + '&select=name,set,images&orderBy=-set.releaseDate&pageSize=10';
+      const res1 = await fetch(url1);
+      if (res1.ok) {
+        const data1 = await res1.json();
+        const img = extractImageFromResults(data1.data, card);
+        if (img) return img;
+      }
+    }
+
+    // Stage 2: name only
+    const q2 = `name:"${namePart}"`;
+    const url2 = 'https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(q2) + '&select=name,set,images&orderBy=-set.releaseDate&pageSize=10';
+    const res2 = await fetch(url2);
+    if (!res2.ok) return null;
+    const data2 = await res2.json();
+    return extractImageFromResults(data2.data, card);
+  } catch (e) {
+    console.warn('fetchCardImage error:', e);
+    return null;
+  }
+}
+
+function extractImageFromResults(results, card) {
+  if (!results || results.length === 0) return null;
+  const cardSetLower = (card.set || '').toLowerCase();
+  const scored = results.map(r => {
+    let score = 0;
+    if (r.name && r.name.toLowerCase() === card.name.toLowerCase()) score += 10;
+    if (cardSetLower && r.set && r.set.name) {
+      const rSetLower = r.set.name.toLowerCase();
+      if (rSetLower === cardSetLower) score += 5;
+      else if (rSetLower.includes(cardSetLower) || cardSetLower.includes(rSetLower)) score += 3;
+    }
+    return { ...r, _score: score };
+  }).sort((a, b) => b._score - a._score);
+
+  for (const match of scored) {
+    const img = match.images && (match.images.large || match.images.small);
+    if (img) return img;
+  }
+  return null;
+}
+
 // ── Card detail modal ────────────────────────────────────────────────
-function openCard(id) {
+async function openCard(id) {
   const card = cards.find(c => c.id === id);
   if (!card) return;
   editingCardId = id;
@@ -479,6 +531,28 @@ function openCard(id) {
     notesWrap.style.display = 'none';
   }
 
+  // ── Card image ──
+  const imgWrap = document.getElementById('modal-card-image-wrap');
+  const imgEl = document.getElementById('modal-card-image');
+  imgWrap.style.display = 'none';
+  imgEl.src = '';
+  imgEl.classList.remove('loaded');
+
+  document.getElementById('modal-overlay').classList.add('active');
+
+  // Fetch image async (non-blocking, shows after modal opens)
+  fetchCardImage(card).then(imgUrl => {
+    if (imgUrl) {
+      imgEl.onload = () => {
+        imgEl.classList.add('loaded');
+        imgWrap.style.display = 'flex';
+      };
+      imgEl.onerror = () => { imgWrap.style.display = 'none'; };
+      imgEl.src = imgUrl;
+    }
+  });
+
+  // ── Price chart ──
   const history = card.priceHistory || [];
   const emptyEl = document.getElementById('modal-chart-empty');
   const chartContainer = document.querySelector('.modal-chart-container');
@@ -531,7 +605,6 @@ function openCard(id) {
       }
     });
   }
-  document.getElementById('modal-overlay').classList.add('active');
 }
 
 function closeModal(e) {
@@ -764,7 +837,6 @@ async function fetchPrice(card) {
   try {
     const namePart = card.name.replace(/['"]/g, '').trim();
 
-    // Stage 1: exact name + exact set
     if (card.set) {
       const setSanitized = card.set.replace(/['"]/g, '').trim();
       const q1 = `name:"${namePart}" set.name:"${setSanitized}"`;
@@ -778,7 +850,6 @@ async function fetchPrice(card) {
         }
       }
 
-      // Stage 2: exact name + wildcard set (first word)
       const setFirstWord = setSanitized.split(' ')[0];
       if (setFirstWord.length > 2) {
         const q2 = `name:"${namePart}" set.name:${setFirstWord}*`;
@@ -794,7 +865,6 @@ async function fetchPrice(card) {
       }
     }
 
-    // Stage 3: name only, pick best priced result
     const q3 = `name:"${namePart}"`;
     const url3 = 'https://api.pokemontcg.io/v2/cards?q=' + encodeURIComponent(q3) + '&select=name,set,number,tcgplayer&orderBy=-set.releaseDate&pageSize=20';
     const res3 = await fetch(url3);
@@ -812,7 +882,6 @@ async function fetchPrice(card) {
 function extractPriceFromResults(results, card) {
   const cardSetLower = (card.set || '').toLowerCase();
 
-  // Score each result by name + set similarity
   const scored = results.map(r => {
     let score = 0;
     if (r.name.toLowerCase() === card.name.toLowerCase()) score += 10;
@@ -830,7 +899,6 @@ function extractPriceFromResults(results, card) {
     const prices = match.tcgplayer ? match.tcgplayer.prices : null;
     if (!prices) continue;
 
-    // Check preferred keys first, then fall through to any key
     const preferredKeys = ['holofoil','1stEditionHolofoil','normal','reverseHolofoil','unlimited','1stEdition'];
     let base = null;
     for (const key of preferredKeys) {
