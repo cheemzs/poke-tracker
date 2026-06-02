@@ -33,7 +33,6 @@
           <div class="theme-switcher">
             <button class="theme-option" data-theme="dark"    onclick="setTheme('dark')"    title="Dark">🌑</button>
             <button class="theme-option" data-theme="light"   onclick="setTheme('light')"   title="Light">☀️</button>
-            <button class="theme-option" data-theme="dark2"   onclick="setTheme('dark2')"   title="Dark Blue">💙</button>
             <button class="theme-option" data-theme="lucario" onclick="setTheme('lucario')" title="Lucario">⚔️</button>
           </div>
           <span class="header-username" id="username-display"></span>
@@ -112,10 +111,10 @@
   </main>
 
   <script>
-    // ── Theme (shared with main page) ────────────────────────────
-    const THEMES = ['dark', 'light', 'dark2', 'lucario'];
+    const THEMES = ['dark', 'light', 'lucario'];
 
     function setTheme(theme) {
+      if (!THEMES.includes(theme)) theme = 'dark';
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('pv-theme', theme);
       document.querySelectorAll('.theme-option').forEach(btn => {
@@ -124,13 +123,13 @@
     }
 
     (function initTheme() {
-      const saved = localStorage.getItem('pv-theme') || 'dark';
+      let saved = localStorage.getItem('pv-theme') || 'dark';
+      if (saved === 'dark2') saved = 'dark';
       setTheme(THEMES.includes(saved) ? saved : 'dark');
     })();
 
     window.addEventListener('scroll', () => {
-      const header = document.getElementById('site-header');
-      if (header) header.classList.toggle('scrolled', window.scrollY > 20);
+      document.getElementById('site-header')?.classList.toggle('scrolled', window.scrollY > 20);
     });
 
     async function logout() {
@@ -144,7 +143,6 @@
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // ── Init ─────────────────────────────────────────────────────
     async function init() {
       const meRes = await fetch('/api/me');
       if (!meRes.ok) { window.location.href = '/login.html'; return; }
@@ -157,7 +155,6 @@
       renderStats(cards);
     }
 
-    // ── Render ───────────────────────────────────────────────────
     function renderStats(cards) {
       const active = cards.filter(c => !c.sold);
       const sold   = cards.filter(c =>  c.sold);
@@ -181,7 +178,7 @@
         .map(c => ({ ...c, roi: ((Number(c.currentValue) - Number(c.purchasePrice)) / Number(c.purchasePrice)) * 100 }))
         .sort((a, b) => b.roi - a.roi);
 
-      if (withROI.length > 0) {
+      if (withROI.length) {
         const best  = withROI[0];
         const worst = withROI[withROI.length - 1];
         const bestEl  = document.getElementById('stat-best-roi');
@@ -221,11 +218,11 @@
           labels,
           datasets: [{
             data: values,
-            borderColor: '#c9a84c',
-            backgroundColor: 'rgba(201,168,76,0.08)',
+            borderColor: 'var(--accent)',
+            backgroundColor: 'var(--accent-glow)',
             borderWidth: 2,
             pointRadius: 3,
-            pointBackgroundColor: '#c9a84c',
+            pointBackgroundColor: 'var(--accent)',
             tension: 0.4,
             fill: true,
           }],
@@ -238,8 +235,16 @@
             tooltip: { callbacks: { label: ctx => 'SGD $' + Number(ctx.raw).toFixed(2) } },
           },
           scales: {
-            y: { ticks: { callback: v => '$' + v, font: { size: 11, family: 'DM Mono' }, color: '#555a6e' }, grid: { color: 'rgba(255,255,255,0.07)' }, border: { display: false } },
-            x: { ticks: { font: { size: 11, family: 'DM Mono' }, color: '#555a6e' }, grid: { display: false }, border: { display: false } },
+            y: {
+              ticks: { callback: v => '$' + v, font: { size: 11, family: 'DM Mono' }, color: 'var(--text3)' },
+              grid: { color: 'var(--border)' },
+              border: { display: false },
+            },
+            x: {
+              ticks: { font: { size: 11, family: 'DM Mono' }, color: 'var(--text3)' },
+              grid: { display: false },
+              border: { display: false },
+            },
           },
         },
       });
@@ -254,7 +259,7 @@
       });
       const labels = Object.keys(grades);
       const values = labels.map(l => grades[l]);
-      const colors = ['#c9a84c','#4a90d9','#4caf50','#dc50a0','#ff6432','#ffc800','#503c78','#788ca0'];
+      const colors = ['#7b9fd4','#4a90d9','#4caf50','#dc50a0','#ff6432','#ffc800','#503c78','#788ca0'];
 
       const ctx = document.getElementById('chart-grade').getContext('2d');
       new Chart(ctx, {
@@ -267,7 +272,7 @@
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { position: 'right', labels: { font: { size: 11, family: 'DM Mono' }, color: '#8b90a0', boxWidth: 12 } },
+            legend: { position: 'right', labels: { font: { size: 11, family: 'DM Mono' }, color: 'var(--text2)', boxWidth: 12 } },
             tooltip: { callbacks: { label: ctx => ctx.label + ': SGD $' + Number(ctx.raw).toFixed(2) } },
           },
         },
@@ -281,8 +286,8 @@
       const row = c => {
         const pos = c.roi >= 0;
         return '<div class="performer-row">' +
-          '<div class="performer-name">' + esc(c.name) + '<span class="performer-set">' + esc(c.set || '—') + '</span></div>' +
-          '<div class="performer-roi ' + (pos ? 'profit-pos' : 'profit-neg') + '">' + (pos ? '+' : '') + c.roi.toFixed(1) + '%</div>' +
+          `<div class="performer-name">${esc(c.name)}<span class="performer-set">${esc(c.set||'—')}</span></div>` +
+          `<div class="performer-roi ${pos ? 'profit-pos' : 'profit-neg'}">${pos?'+':''}${c.roi.toFixed(1)}%</div>` +
           '</div>';
       };
 
@@ -292,21 +297,18 @@
     }
 
     function buildSoldBreakdown(sold) {
-      if (sold.length === 0) {
-        document.getElementById('sold-empty').style.display = 'block';
-        return;
-      }
+      if (!sold.length) { document.getElementById('sold-empty').style.display = 'block'; return; }
       document.getElementById('sold-breakdown').innerHTML = sold.map(c => {
         const profit = (Number(c.soldPrice) - Number(c.purchasePrice)) * (c.quantity || 1);
         const pos    = profit >= 0;
         return '<div class="sold-breakdown-row">' +
-          '<div><div class="performer-name">' + esc(c.name) + '<span class="performer-set">' + esc(c.set || '—') + '</span></div>' +
-          '<div style="font-size:11px; color:var(--text3); font-family:var(--font-mono); margin-top:2px;">' +
-            (c.soldDate || '—') + (c.soldTo ? ' · ' + esc(c.soldTo) : '') +
-          '</div></div>' +
+          '<div>' +
+            `<div class="performer-name">${esc(c.name)}<span class="performer-set">${esc(c.set||'—')}</span></div>` +
+            `<div style="font-size:11px; color:var(--text3); font-family:var(--font-mono); margin-top:2px;">${c.soldDate||'—'}${c.soldTo ? ' · ' + esc(c.soldTo) : ''}</div>` +
+          '</div>' +
           '<div style="text-align:right;">' +
-            '<div style="font-family:var(--font-mono); font-size:13px;">SGD $' + Number(c.soldPrice).toFixed(2) + '</div>' +
-            '<div class="performer-roi ' + (pos ? 'profit-pos' : 'profit-neg') + '">' + (pos ? '+' : '') + 'SGD $' + profit.toFixed(2) + '</div>' +
+            `<div style="font-family:var(--font-mono); font-size:13px;">SGD $${Number(c.soldPrice).toFixed(2)}</div>` +
+            `<div class="performer-roi ${pos ? 'profit-pos' : 'profit-neg'}">${pos?'+':''}SGD $${profit.toFixed(2)}</div>` +
           '</div>' +
           '</div>';
       }).join('');
