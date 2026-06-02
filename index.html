@@ -15,7 +15,7 @@
 
   <div id="toast-container"></div>
 
-  <!-- ── Card detail modal ────────────────────────────────────── -->
+  <!-- ── Card detail modal ──────────────────────────────────────── -->
   <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
     <div class="modal modal-card-detail" id="card-modal">
       <button class="modal-close" onclick="document.getElementById('modal-overlay').classList.remove('active')">✕</button>
@@ -23,7 +23,7 @@
 
       <div class="modal-tabs">
         <button class="modal-tab active" id="modal-tab-info"  onclick="switchModalTab('info')">Card Info</button>
-        <button class="modal-tab"        id="modal-tab-image" onclick="switchModalTab('image')">Card Image</button>
+        <button class="modal-tab"        id="modal-tab-image" onclick="switchModalTabWithPicker('image')">Card Image</button>
       </div>
 
       <div id="modal-panel-info">
@@ -102,7 +102,17 @@
     </div>
   </div>
 
-  <!-- ── Edit modal ───────────────────────────────────────────── -->
+  <!-- ── Card picker modal ──────────────────────────────────────── -->
+  <div class="modal-overlay" id="picker-overlay">
+    <div class="modal picker-modal">
+      <button class="modal-close" onclick="closePickerModal()">✕</button>
+      <h2 class="picker-heading" id="picker-title">Select the correct card</h2>
+      <p class="picker-subheading">Multiple versions found — click the one you own</p>
+      <div class="picker-grid" id="picker-grid"></div>
+    </div>
+  </div>
+
+  <!-- ── Edit modal ─────────────────────────────────────────────── -->
   <div class="modal-overlay" id="edit-overlay">
     <div class="modal">
       <button class="modal-close" onclick="closeEditModal()">✕</button>
@@ -180,7 +190,7 @@
     </div>
   </div>
 
-  <!-- ── Sell modal ───────────────────────────────────────────── -->
+  <!-- ── Sell modal ─────────────────────────────────────────────── -->
   <div class="modal-overlay" id="sell-overlay">
     <div class="modal" style="max-width:420px;">
       <button class="modal-close" onclick="closeSellModal()">✕</button>
@@ -207,7 +217,7 @@
     </div>
   </div>
 
-  <!-- ── Manual price modal ───────────────────────────────────── -->
+  <!-- ── Manual price modal ─────────────────────────────────────── -->
   <div class="modal-overlay" id="manual-price-overlay">
     <div class="modal" style="max-width:380px;">
       <button class="modal-close" onclick="closeManualPriceModal()">✕</button>
@@ -225,7 +235,7 @@
     </div>
   </div>
 
-  <!-- ── Confirm dialog ───────────────────────────────────────── -->
+  <!-- ── Confirm dialog ─────────────────────────────────────────── -->
   <div class="modal-overlay" id="confirm-overlay">
     <div class="modal confirm-modal">
       <p class="confirm-message" id="confirm-message"></p>
@@ -236,7 +246,7 @@
     </div>
   </div>
 
-  <!-- ── Header ───────────────────────────────────────────────── -->
+  <!-- ── Header ─────────────────────────────────────────────────── -->
   <header class="site-header" id="site-header">
     <div class="header-inner">
       <a href="/" class="header-brand">
@@ -249,7 +259,7 @@
         </div>
       </a>
       <nav class="header-nav">
-        <a href="/"          class="nav-link active">Collection</a>
+        <a href="/"           class="nav-link active">Collection</a>
         <a href="/stats.html" class="nav-link">Stats</a>
       </nav>
       <div class="header-right">
@@ -261,7 +271,6 @@
           <div class="theme-switcher">
             <button class="theme-option" data-theme="dark"    onclick="setTheme('dark')"    title="Dark">🌑</button>
             <button class="theme-option" data-theme="light"   onclick="setTheme('light')"   title="Light">☀️</button>
-            <button class="theme-option" data-theme="dark2"   onclick="setTheme('dark2')"   title="Dark Blue">💙</button>
             <button class="theme-option" data-theme="lucario" onclick="setTheme('lucario')" title="Lucario">⚔️</button>
           </div>
           <label class="color-toggle-label" title="Toggle type colours">
@@ -276,7 +285,7 @@
     </div>
   </header>
 
-  <!-- ── Main content ─────────────────────────────────────────── -->
+  <!-- ── Main content ───────────────────────────────────────────── -->
   <main class="main-content">
 
     <!-- Summary metrics -->
@@ -450,7 +459,7 @@
           </div>
         </div>
         <div class="form-actions">
-          <button class="btn-cancel" onclick="toggleForm()">Cancel</button>
+          <button class="btn-cancel"  onclick="toggleForm()">Cancel</button>
           <button class="btn-primary" onclick="addCard()">Add to vault</button>
         </div>
       </div>
@@ -474,14 +483,14 @@
           <thead>
             <tr>
               <th onclick="sortBy('name')"          class="sortable">Card <span class="sort-arr">↕</span></th>
-              <th onclick="sortBy('set')"           class="sortable">Set <span class="sort-arr">↕</span></th>
+              <th onclick="sortBy('set')"            class="sortable">Set <span class="sort-arr">↕</span></th>
               <th>Type</th>
               <th>Grade</th>
               <th>Qty</th>
-              <th onclick="sortBy('purchasePrice')" class="sortable">Paid <span class="sort-arr">↕</span></th>
-              <th onclick="sortBy('currentValue')"  class="sortable">Value <span class="sort-arr">↕</span></th>
-              <th onclick="sortBy('profit')"        class="sortable">P/L <span class="sort-arr">↕</span></th>
-              <th onclick="sortBy('lastUpdated')"   class="sortable">Updated <span class="sort-arr">↕</span></th>
+              <th onclick="sortBy('purchasePrice')"  class="sortable">Paid <span class="sort-arr">↕</span></th>
+              <th onclick="sortBy('currentValue')"   class="sortable">Value <span class="sort-arr">↕</span></th>
+              <th onclick="sortBy('profit')"         class="sortable">P/L <span class="sort-arr">↕</span></th>
+              <th onclick="sortBy('lastUpdated')"    class="sortable">Updated <span class="sort-arr">↕</span></th>
               <th></th>
               <th></th>
             </tr>
