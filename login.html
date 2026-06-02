@@ -4,12 +4,24 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pokémon Card Tracker — Login</title>
+  <link rel="icon" href="/pfp.jpeg" type="image/jpeg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body class="auth-page">
 
+  <!-- Full-page hero background image -->
+  <div class="auth-bg">
+    <img src="/pfp.jpeg" alt="" class="auth-bg-img" />
+    <div class="auth-bg-overlay"></div>
+  </div>
+
   <div class="auth-box">
-    <div class="auth-logo">&#x1F4C7;</div>
+    <div class="auth-logo">
+      <img src="/pfp.jpeg" alt="PokeVault Logo" class="auth-logo-img" />
+    </div>
     <h1 class="auth-title">Card Tracker</h1>
     <p class="auth-subtitle">Track your Pokémon collection in SGD</p>
 
@@ -24,12 +36,12 @@
           <label>Username</label>
           <input type="text" id="login-user" placeholder="Your username" autocomplete="username" />
         </div>
-        <div class="form-group">
+        <div class="form-group" style="margin-top:12px;">
           <label>Password</label>
           <input type="password" id="login-pass" placeholder="Your password" autocomplete="current-password" />
         </div>
         <p class="auth-error" id="login-error"></p>
-        <button type="submit" class="btn-primary full-width">Log in</button>
+        <button type="submit" class="btn-primary full-width" style="margin-top:8px;">Log in</button>
       </form>
     </div>
 
@@ -39,17 +51,23 @@
           <label>Username</label>
           <input type="text" id="reg-user" placeholder="Choose a username" autocomplete="username" />
         </div>
-        <div class="form-group">
+        <div class="form-group" style="margin-top:12px;">
           <label>Password</label>
           <input type="password" id="reg-pass" placeholder="Choose a password" autocomplete="new-password" />
         </div>
         <p class="auth-error" id="reg-error"></p>
-        <button type="submit" class="btn-primary full-width">Create account</button>
+        <button type="submit" class="btn-primary full-width" style="margin-top:8px;">Create account</button>
       </form>
     </div>
   </div>
 
   <script>
+    // Apply saved theme
+    (function() {
+      const saved = localStorage.getItem('pv-theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', saved);
+    })();
+
     function showTab(tab) {
       document.getElementById('tab-login').style.display = tab === 'login' ? 'block' : 'none';
       document.getElementById('tab-register').style.display = tab === 'register' ? 'block' : 'none';
@@ -92,7 +110,6 @@
       if (!res.ok) { errEl.textContent = data.error; return; }
       window.location.href = '/';
     }
-
   </script>
 </body>
 </html>
