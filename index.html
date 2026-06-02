@@ -15,7 +15,7 @@
 
   <div id="toast-container"></div>
 
-  <!-- Card detail modal -->
+  <!-- ── Card detail modal ── -->
   <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
     <div class="modal modal-card-detail" id="card-modal">
       <button class="modal-close" onclick="closeModal()">✕</button>
@@ -27,46 +27,40 @@
         <button class="modal-tab" id="modal-tab-image" onclick="switchModalTab('image')">Card Image</button>
       </div>
 
-      <!-- Info Tab -->
+      <!-- Info Tab: NO card image thumbnail here -->
       <div id="modal-panel-info">
-        <div class="modal-top-row">
-          <div class="modal-card-image-wrap modal-card-image-wrap--small" id="modal-card-image-wrap-small" style="display:none;">
-            <img id="modal-card-image-small" class="modal-card-image" alt="Card art" />
+        <div class="modal-header">
+          <div>
+            <h2 id="modal-name"></h2>
+            <p id="modal-meta"></p>
           </div>
-          <div class="modal-header-content">
-            <div class="modal-header">
-              <div>
-                <h2 id="modal-name"></h2>
-                <p id="modal-meta"></p>
-              </div>
-              <span class="badge" id="modal-grade"></span>
-            </div>
-            <div class="modal-stats">
-              <div class="modal-stat">
-                <div class="modal-stat-label">Purchase price</div>
-                <div class="modal-stat-value" id="modal-cost"></div>
-              </div>
-              <div class="modal-stat">
-                <div class="modal-stat-label">Current value</div>
-                <div class="modal-stat-value" id="modal-value"></div>
-              </div>
-              <div class="modal-stat">
-                <div class="modal-stat-label">Profit / loss</div>
-                <div class="modal-stat-value" id="modal-profit"></div>
-              </div>
-              <div class="modal-stat">
-                <div class="modal-stat-label">Last updated</div>
-                <div class="modal-stat-value" id="modal-updated"></div>
-              </div>
-              <div class="modal-stat">
-                <div class="modal-stat-label">Purchase date</div>
-                <div class="modal-stat-value" id="modal-purchase-date"></div>
-              </div>
-              <div class="modal-stat">
-                <div class="modal-stat-label">Target price</div>
-                <div class="modal-stat-value" id="modal-target"></div>
-              </div>
-            </div>
+          <span class="badge" id="modal-grade"></span>
+        </div>
+
+        <div class="modal-stats">
+          <div class="modal-stat">
+            <div class="modal-stat-label">Purchase price</div>
+            <div class="modal-stat-value" id="modal-cost"></div>
+          </div>
+          <div class="modal-stat">
+            <div class="modal-stat-label">Current value</div>
+            <div class="modal-stat-value" id="modal-value"></div>
+          </div>
+          <div class="modal-stat">
+            <div class="modal-stat-label">Profit / loss</div>
+            <div class="modal-stat-value" id="modal-profit"></div>
+          </div>
+          <div class="modal-stat">
+            <div class="modal-stat-label">Last updated</div>
+            <div class="modal-stat-value" id="modal-updated"></div>
+          </div>
+          <div class="modal-stat">
+            <div class="modal-stat-label">Purchase date</div>
+            <div class="modal-stat-value" id="modal-purchase-date"></div>
+          </div>
+          <div class="modal-stat">
+            <div class="modal-stat-label">Target price</div>
+            <div class="modal-stat-value" id="modal-target"></div>
           </div>
         </div>
 
@@ -90,7 +84,7 @@
         </div>
       </div>
 
-      <!-- Image Tab -->
+      <!-- Image Tab: card art only shown here -->
       <div id="modal-panel-image" style="display:none;">
         <div class="modal-image-tab-wrap">
           <div id="modal-image-loading" class="modal-image-loading">
@@ -112,7 +106,7 @@
     </div>
   </div>
 
-  <!-- Edit modal -->
+  <!-- ── Edit modal ── -->
   <div class="modal-overlay" id="edit-overlay">
     <div class="modal">
       <button class="modal-close" onclick="closeEditModal()">✕</button>
@@ -190,7 +184,7 @@
     </div>
   </div>
 
-  <!-- Sell modal -->
+  <!-- ── Sell modal ── -->
   <div class="modal-overlay" id="sell-overlay">
     <div class="modal" style="max-width:420px;">
       <button class="modal-close" onclick="closeSellModal()">✕</button>
@@ -217,7 +211,7 @@
     </div>
   </div>
 
-  <!-- Manual price modal -->
+  <!-- ── Manual price modal ── -->
   <div class="modal-overlay" id="manual-price-overlay">
     <div class="modal" style="max-width:380px;">
       <button class="modal-close" onclick="closeManualPriceModal()">✕</button>
@@ -235,7 +229,7 @@
     </div>
   </div>
 
-  <!-- Confirm dialog -->
+  <!-- ── Confirm dialog ── -->
   <div class="modal-overlay" id="confirm-overlay">
     <div class="modal confirm-modal">
       <p class="confirm-message" id="confirm-message"></p>
@@ -246,7 +240,7 @@
     </div>
   </div>
 
-  <!-- Header -->
+  <!-- ── Header ── -->
   <header class="site-header" id="site-header">
     <div class="header-inner">
       <div class="header-brand">
@@ -269,9 +263,10 @@
         </div>
         <div class="header-controls">
           <div class="theme-switcher">
-            <button class="theme-option" data-theme="dark" onclick="setTheme('dark')" title="Dark mode">🌑</button>
-            <button class="theme-option" data-theme="light" onclick="setTheme('light')" title="Light mode">☀️</button>
-            <button class="theme-option" data-theme="lucario" onclick="setTheme('lucario')" title="Lucario theme">⚡</button>
+            <button class="theme-option" data-theme="dark"   onclick="setTheme('dark')"   title="Dark">🌑</button>
+            <button class="theme-option" data-theme="light"  onclick="setTheme('light')"  title="Light">☀️</button>
+            <button class="theme-option" data-theme="dark2"  onclick="setTheme('dark2')"  title="Dark Blue">💙</button>
+            <button class="theme-option" data-theme="lucario" onclick="setTheme('lucario')" title="Lucario">⚔️</button>
           </div>
           <label class="color-toggle-label">
             <input type="checkbox" id="color-toggle" onchange="toggleColors()" checked />
