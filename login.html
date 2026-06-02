@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pokémon Card Tracker — Login</title>
+  <title>PokeVault — Login</title>
   <link rel="icon" href="/pfp.jpeg" type="image/jpeg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,17 +12,11 @@
 </head>
 <body class="auth-page">
 
-  <!-- Full-page hero background image -->
-  <div class="auth-bg">
-    <img src="/pfp.jpeg" alt="" class="auth-bg-img" />
-    <div class="auth-bg-overlay"></div>
-  </div>
-
   <div class="auth-box">
     <div class="auth-logo">
       <img src="/pfp.jpeg" alt="PokeVault Logo" class="auth-logo-img" />
     </div>
-    <h1 class="auth-title">Card Tracker</h1>
+    <h1 class="auth-title">PokeVault</h1>
     <p class="auth-subtitle">Track your Pokémon collection in SGD</p>
 
     <div class="auth-tabs">
@@ -53,7 +47,7 @@
         </div>
         <div class="form-group" style="margin-top:12px;">
           <label>Password</label>
-          <input type="password" id="reg-pass" placeholder="Choose a password" autocomplete="new-password" />
+          <input type="password" id="reg-pass" placeholder="Choose a password (min 6 chars)" autocomplete="new-password" />
         </div>
         <p class="auth-error" id="reg-error"></p>
         <button type="submit" class="btn-primary full-width" style="margin-top:8px;">Create account</button>
@@ -62,31 +56,30 @@
   </div>
 
   <script>
-    // Apply saved theme
-    (function() {
+    // Apply saved theme on load
+    (function () {
       const saved = localStorage.getItem('pv-theme') || 'dark';
       document.documentElement.setAttribute('data-theme', saved);
     })();
 
     function showTab(tab) {
-      document.getElementById('tab-login').style.display = tab === 'login' ? 'block' : 'none';
+      document.getElementById('tab-login').style.display    = tab === 'login'    ? 'block' : 'none';
       document.getElementById('tab-register').style.display = tab === 'register' ? 'block' : 'none';
-      document.querySelectorAll('.auth-tab').forEach((b, i) => {
-        b.classList.toggle('active', (i === 0 && tab === 'login') || (i === 1 && tab === 'register'));
+      document.querySelectorAll('.auth-tab').forEach((btn, i) => {
+        btn.classList.toggle('active', (i === 0 && tab === 'login') || (i === 1 && tab === 'register'));
       });
     }
 
     async function login() {
       const username = document.getElementById('login-user').value.trim();
       const password = document.getElementById('login-pass').value;
-      const errEl = document.getElementById('login-error');
+      const errEl    = document.getElementById('login-error');
       errEl.textContent = '';
       if (!username || !password) { errEl.textContent = 'Please fill in both fields.'; return; }
-
-      const res = await fetch('/api/login', {
+      const res  = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password }),
       });
       const data = await res.json();
       if (!res.ok) { errEl.textContent = data.error; return; }
@@ -96,15 +89,14 @@
     async function register() {
       const username = document.getElementById('reg-user').value.trim();
       const password = document.getElementById('reg-pass').value;
-      const errEl = document.getElementById('reg-error');
+      const errEl    = document.getElementById('reg-error');
       errEl.textContent = '';
-      if (!username || !password) { errEl.textContent = 'Please fill in both fields.'; return; }
-      if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
-
-      const res = await fetch('/api/register', {
+      if (!username || !password)     { errEl.textContent = 'Please fill in both fields.'; return; }
+      if (password.length < 6)        { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+      const res  = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password }),
       });
       const data = await res.json();
       if (!res.ok) { errEl.textContent = data.error; return; }
