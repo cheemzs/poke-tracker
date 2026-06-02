@@ -1174,3 +1174,73 @@ tr:last-child td { border-bottom: none; }
   .search-wrap { margin-bottom: 8px; }
   .btn-export, .btn-reset { padding: 9px 10px; }
 }
+
+/* ── Modal top row: card image + info side by side ─────────────────── */
+.modal-top-row {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.modal-card-image-wrap {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.modal-card-image {
+  width: 140px;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px var(--border2);
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  display: block;
+}
+
+.modal-card-image.loaded {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.modal-header-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* When image is hidden, header-content fills full width */
+.modal-header-content .modal-header {
+  margin-bottom: 16px;
+}
+
+/* Remove the old margin-bottom from modal-header since it's now inside modal-header-content */
+.modal-header {
+  margin-bottom: 0;
+}
+
+/* ── Brand logo SVG fix — remove old emoji background ─────────────── */
+.brand-logo {
+  width: 40px;
+  height: 40px;
+  background: transparent !important;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+/* ── Mobile: stack card image above stats ──────────────────────────── */
+@media (max-width: 600px) {
+  .modal-top-row {
+    flex-direction: column;
+    align-items: center;
+  }
+  .modal-card-image {
+    width: 120px;
+  }
+}
