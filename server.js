@@ -5,7 +5,7 @@ const session      = require('express-session');
 const bcrypt       = require('bcryptjs');
 const https        = require('https');
 const { createClient } = require('@supabase/supabase-js');
-const SupabaseStore    = require('connect-supabase-js').default;
+const SupabaseStore    = require('@supabase/connect-supabase-js').default;
 
 const SUPABASE_URL   = 'https://kilkeuaeusfqsobhxlou.supabase.co';
 const SUPABASE_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpbGtldWFldXNmcXNvYmh4bG91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMjYyNjEsImV4cCI6MjA5NTYwMjI2MX0.Gph5uSVo45L7__58vRZz-KaVrs8o6RSdnQusY2csJTw';
