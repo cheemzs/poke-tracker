@@ -5,7 +5,7 @@ const session      = require('express-session');
 const bcrypt       = require('bcryptjs');
 const https        = require('https');
 const { createClient } = require('@supabase/supabase-js');
-const pgSession = require('connect-pg-simple')(session);
+const pgSession        = require('connect-pg-simple')(session);
 
 const SUPABASE_URL   = 'https://kilkeuaeusfqsobhxlou.supabase.co';
 const SUPABASE_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpbGtldWFldXNmcXNvYmh4bG91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMjYyNjEsImV4cCI6MjA5NTYwMjI2MX0.Gph5uSVo45L7__58vRZz-KaVrs8o6RSdnQusY2csJTw';
@@ -14,7 +14,7 @@ const POKEPRICE_BASE = 'https://api.pokeprice.io';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ── Supabase session store (fixes MemoryStore production warning) ─────────
+// ── Postgres session store ─────────────────────────────────────────────────
 const sessionStore = new pgSession({
   conString: process.env.DATABASE_URL,
   tableName: 'session',
@@ -91,7 +91,7 @@ function pokePriceFetch(path) {
   });
 }
 
-// POST /api/pokeprice/search  — name + number + setName + promo
+// POST /api/pokeprice/search
 app.post('/api/pokeprice/search', requireAuth, async (req, res) => {
   const { name, number, setName, promo } = req.body;
   if (!name && !number)
