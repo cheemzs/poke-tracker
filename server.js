@@ -1,31 +1,42 @@
 'use strict';
 
-const express = require('express');
-const session = require('express-session');
-const bcrypt  = require('bcryptjs');
+const express      = require('express');
+const session      = require('express-session');
+const bcrypt       = require('bcryptjs');
+const https        = require('https');
 const { createClient } = require('@supabase/supabase-js');
+const SupabaseStore    = require('connect-supabase-js').default;
 
-const SUPABASE_URL = 'https://kilkeuaeusfqsobhxlou.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpbGtldWFldXNmcXNvYmh4bG91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMjYyNjEsImV4cCI6MjA5NTYwMjI2MX0.Gph5uSVo45L7__58vRZz-KaVrs8o6RSdnQusY2csJTw';
+const SUPABASE_URL   = 'https://kilkeuaeusfqsobhxlou.supabase.co';
+const SUPABASE_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpbGtldWFldXNmcXNvYmh4bG91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMjYyNjEsImV4cCI6MjA5NTYwMjI2MX0.Gph5uSVo45L7__58vRZz-KaVrs8o6RSdnQusY2csJTw';
+const POKEPRICE_KEY  = 'pokeprice_free_0dfc20b731df3c4741686798a6577bdc4eb04aaf687a803a';
+const POKEPRICE_BASE = 'https://api.pokeprice.io';
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const app = express();
+// ── Supabase session store (fixes MemoryStore production warning) ─────────
+const sessionStore = new SupabaseStore({
+  tableName:  'sessions',
+  supabase,
+});
 
+const app = express();
 app.use(express.json());
 app.use(session({
-  secret: 'pokevault-secret-key-v5',
-  resave: false,
+  store:             sessionStore,
+  secret:            'pokevault-secret-key-v6',
+  resave:            false,
   saveUninitialized: false,
-  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 },
+  cookie:            { maxAge: 7 * 24 * 60 * 60 * 1000, sameSite: 'lax' },
 }));
 
-// ── Auth middleware ───────────────────────────────────────────────────────
+// ── Auth middleware ────────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
   if (!req.session.userId) return res.status(401).json({ error: 'Not logged in' });
   next();
 }
 
-// ── Shape converters ─────────────────────────────────────────────────────
+// ── Shape converter ────────────────────────────────────────────────────────
 function toClient(c) {
   return {
     id:            c.id,
@@ -48,10 +59,87 @@ function toClient(c) {
     soldTo:        c.sold_to,
     imageUrl:      c.image_url      ?? null,
     tcgId:         c.tcg_id         ?? null,
+    cardNumber:    c.card_number    ?? null,
   };
 }
 
-// ── Auth routes ───────────────────────────────────────────────────────────
+// ── PokéPrice proxy helpers ────────────────────────────────────────────────
+function pokePriceFetch(path) {
+  return new Promise((resolve, reject) => {
+    const url     = new URL(POKEPRICE_BASE + path);
+    const options = {
+      hostname: url.hostname,
+      path:     url.pathname + url.search,
+      method:   'GET',
+      headers: {
+        'X-Api-Key':    POKEPRICE_KEY,
+        'Content-Type': 'application/json',
+        'Accept':       'application/json',
+      },
+    };
+    const req = https.request(options, res => {
+      let body = '';
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, data: JSON.parse(body) }); }
+        catch { resolve({ status: res.statusCode, data: body }); }
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+// POST /api/pokeprice/search  — name + number + setName + promo
+app.post('/api/pokeprice/search', requireAuth, async (req, res) => {
+  const { name, number, setName, promo } = req.body;
+  if (!name && !number)
+    return res.status(400).json({ error: 'Provide at least a name or card number.' });
+
+  try {
+    const params = new URLSearchParams();
+    if (name)    params.set('name',    name.trim());
+    if (number)  params.set('number',  String(number).trim());
+    if (setName) params.set('setName', setName.trim());
+    if (promo)   params.set('promo',   'true');
+
+    const { status, data } = await pokePriceFetch(`/cards/search?${params}`);
+    if (status !== 200) {
+      console.error('PokéPrice search error', status, data);
+      return res.status(502).json({ error: 'PokéPrice API error', detail: data });
+    }
+    res.json(data);
+  } catch (e) {
+    console.error('pokeprice search exception', e);
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+// GET /api/pokeprice/card/:id
+app.get('/api/pokeprice/card/:id', requireAuth, async (req, res) => {
+  try {
+    const { status, data } = await pokePriceFetch(`/cards/${encodeURIComponent(req.params.id)}`);
+    if (status !== 200) return res.status(502).json({ error: 'PokéPrice API error', detail: data });
+    res.json(data);
+  } catch (e) {
+    console.error('pokeprice card fetch exception', e);
+    res.status(500).json({ error: 'Fetch failed' });
+  }
+});
+
+// GET /api/pokeprice/price/:id
+app.get('/api/pokeprice/price/:id', requireAuth, async (req, res) => {
+  try {
+    const { status, data } = await pokePriceFetch(`/prices/${encodeURIComponent(req.params.id)}`);
+    if (status !== 200) return res.status(502).json({ error: 'PokéPrice API error', detail: data });
+    res.json(data);
+  } catch (e) {
+    console.error('pokeprice price fetch exception', e);
+    res.status(500).json({ error: 'Fetch failed' });
+  }
+});
+
+// ── Auth routes ────────────────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
   if (!username?.trim() || !password)
@@ -96,7 +184,7 @@ app.get('/api/me', (req, res) => {
   res.json({ username: req.session.username });
 });
 
-// ── Card routes ───────────────────────────────────────────────────────────
+// ── Card routes ────────────────────────────────────────────────────────────
 app.get('/api/cards', requireAuth, async (req, res) => {
   const { data, error } = await supabase
     .from('cards').select('*')
@@ -110,7 +198,7 @@ app.post('/api/cards', requireAuth, async (req, res) => {
   const {
     name, set, type, grade, quantity, purchasePrice,
     purchaseDate, targetPrice, notes, currentValue,
-    lastUpdated, url, priceHistory, imageUrl, tcgId,
+    lastUpdated, url, priceHistory, imageUrl, tcgId, cardNumber,
   } = req.body;
   const id     = Date.now().toString();
   const record = {
@@ -130,15 +218,15 @@ app.post('/api/cards', requireAuth, async (req, res) => {
     url,
     price_history:  priceHistory ?? [],
     sold:           false,
-    image_url:      imageUrl ?? null,
-    tcg_id:         tcgId    ?? null,
+    image_url:      imageUrl   ?? null,
+    tcg_id:         tcgId      ?? null,
+    card_number:    cardNumber ?? null,
   };
   const { error } = await supabase.from('cards').insert([record]);
   if (error) return res.status(500).json({ error: 'Failed to save card' });
   res.json(toClient({ ...record, sold: false }));
 });
 
-// Full price/history update
 app.put('/api/cards/:id', requireAuth, async (req, res) => {
   const { currentValue, lastUpdated, priceHistory } = req.body;
   const { error } = await supabase.from('cards')
@@ -148,14 +236,13 @@ app.put('/api/cards/:id', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// Partial update (edit / sell / image)
 app.patch('/api/cards/:id', requireAuth, async (req, res) => {
   const fieldMap = {
     name: 'name', set: 'set_name', type: 'type', grade: 'grade',
     quantity: 'quantity', purchasePrice: 'purchase_price', purchaseDate: 'purchase_date',
     targetPrice: 'target_price', notes: 'notes', url: 'url',
     sold: 'sold', soldPrice: 'sold_price', soldDate: 'sold_date', soldTo: 'sold_to',
-    imageUrl: 'image_url', tcgId: 'tcg_id',
+    imageUrl: 'image_url', tcgId: 'tcg_id', cardNumber: 'card_number',
   };
   const update = {};
   for (const [k, v] of Object.entries(fieldMap)) {
@@ -177,6 +264,6 @@ app.delete('/api/cards/:id', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ── Static ────────────────────────────────────────────────────────────────
+// ── Static ─────────────────────────────────────────────────────────────────
 app.use(express.static('.'));
-app.listen(5000, () => console.log('PokeVault v5 running on :5000'));
+app.listen(5000, () => console.log('PokeVault v6 running on :5000'));
