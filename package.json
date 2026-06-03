@@ -7,8 +7,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
+    "@supabase/connect-supabase-js": "^0.2.0",
     "bcryptjs": "^3.0.3",
-    "connect-supabase-js": "^0.2.0",
     "express": "^5.2.1",
     "express-session": "^1.19.0"
   }
